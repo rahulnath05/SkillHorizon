@@ -1,0 +1,11 @@
+**/.git
+**/.vs
+**/.cursor
+**/bin
+**/obj
+**/TestResults
+tests
+docs
+**/*.md
+.env
+**/*.user

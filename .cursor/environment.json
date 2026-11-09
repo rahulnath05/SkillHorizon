@@ -1,0 +1,20 @@
+{
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "install": "dotnet restore SkillHorizon.slnx",
+  "start": "sudo service docker start",
+  "terminals": [
+    {
+      "name": "skillhorizon",
+      "command": "docker compose up --build",
+      "description": "Postgres, Redis, control registry, API, worker, and web shell"
+    }
+  ],
+  "ports": [
+    { "name": "web", "port": 8080 },
+    { "name": "api", "port": 8081 },
+    { "name": "control", "port": 8082 },
+    { "name": "worker", "port": 8083 }
+  ]
+}

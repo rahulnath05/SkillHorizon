@@ -1,0 +1,143 @@
+name: skillhorizon
+
+x-app: &app
+  image: skillhorizon:local
+  build:
+    context: .
+    dockerfile: deploy/docker/Dockerfile
+  environment: &runtime
+    ASPNETCORE_ENVIRONMENT: Production
+    ASPNETCORE_URLS: http://+:8080
+    SkillHorizon__EnableConsoleExporter: "true"
+    SkillHorizon__MigrateOnStartup: "true"
+    SKILLHORIZON_SECRET_LOCAL_SIGNING_KEY: local-signing-key-must-be-at-least-32b
+    SKILLHORIZON_SECRET_REGISTRY_KEY: local-registry-key
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: skillhorizon
+      POSTGRES_PASSWORD: skillhorizon
+      POSTGRES_DB: skillhorizon_domain
+    ports:
+      - "5432:5432"
+    volumes:
+      - skillhorizon-pg:/var/lib/postgresql/data
+      - ./deploy/local/init-databases.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U skillhorizon -d skillhorizon_domain"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  control:
+    <<: *app
+    working_dir: /app/control
+    command: ["dotnet", "SkillHorizon.Control.dll"]
+    environment:
+      <<: *runtime
+      SkillHorizon__ZoneId: control
+      SkillHorizon__ControlConnectionString: Host=postgres;Port=5432;Database=skillhorizon_control;Username=skillhorizon;Password=skillhorizon
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8082:8080"
+    healthcheck: &health
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 25s
+
+  api:
+    <<: *app
+    working_dir: /app/api
+    command: ["dotnet", "SkillHorizon.Api.dll"]
+    environment:
+      <<: *runtime
+      SkillHorizon__ZoneId: local
+      SkillHorizon__DomainConnectionString: Host=postgres;Port=5432;Database=skillhorizon_domain;Username=skillhorizon;Password=skillhorizon
+      SkillHorizon__Redis: redis:6379
+      SkillHorizon__ControlRegistryUrl: http://control:8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      control:
+        condition: service_healthy
+    ports:
+      - "8081:8080"
+    healthcheck: *health
+
+  worker:
+    <<: *app
+    working_dir: /app/worker
+    command: ["dotnet", "SkillHorizon.Worker.dll"]
+    environment:
+      <<: *runtime
+      SkillHorizon__ZoneId: local
+      SkillHorizon__DomainConnectionString: Host=postgres;Port=5432;Database=skillhorizon_domain;Username=skillhorizon;Password=skillhorizon
+      SkillHorizon__Redis: redis:6379
+      SkillHorizon__PublishOutbox: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    ports:
+      - "8083:8080"
+    healthcheck: *health
+
+  web:
+    <<: *app
+    working_dir: /app/web
+    command: ["dotnet", "SkillHorizon.Web.dll"]
+    environment:
+      <<: *runtime
+      SkillHorizon__ZoneId: local
+      SkillHorizon__ApiUrl: http://api:8080
+      SkillHorizon__DevIdentities: person-multi|LE-LOCAL|person-multi;person-single|LE-LOCAL|person-single;person-unmapped|LE-OTHER|person-unmapped;person-nogrant|LE-LOCAL|person-nogrant
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    healthcheck: *health
+
+  seed:
+    image: postgres:16-alpine
+    depends_on:
+      api:
+        condition: service_healthy
+      control:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: skillhorizon
+    volumes:
+      - ./deploy/local/seed-control.sql:/seed-control.sql:ro
+      - ./deploy/local/seed-domain.sql:/seed-domain.sql:ro
+    entrypoint:
+      - sh
+      - -c
+      - |
+        psql -h postgres -U skillhorizon -d skillhorizon_control -v ON_ERROR_STOP=1 -f /seed-control.sql
+        psql -h postgres -U skillhorizon -d skillhorizon_domain -v ON_ERROR_STOP=1 -f /seed-domain.sql
+    restart: "no"
+
+volumes:
+  skillhorizon-pg:

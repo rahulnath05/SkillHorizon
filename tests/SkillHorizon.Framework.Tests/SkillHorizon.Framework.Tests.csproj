@@ -1,0 +1,47 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.14" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="Npgsql" Version="10.0.3" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.16.0" />
+    <PackageReference Include="Testcontainers.Redis" Version="4.16.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\hosts\SkillHorizon.Api\SkillHorizon.Api.csproj" Aliases="ApiHost" />
+    <ProjectReference Include="..\..\src\hosts\SkillHorizon.Worker\SkillHorizon.Worker.csproj" Aliases="WorkerHost" />
+    <ProjectReference Include="..\..\src\hosts\SkillHorizon.Control\SkillHorizon.Control.csproj" Aliases="ControlHost" />
+    <ProjectReference Include="..\..\src\hosts\SkillHorizon.Web\SkillHorizon.Web.csproj" Aliases="WebHost" />
+    <ProjectReference Include="..\..\src\building-blocks\SkillHorizon.Hosting\SkillHorizon.Hosting.csproj" />
+    <ProjectReference Include="..\..\src\building-blocks\SkillHorizon.Messaging\SkillHorizon.Messaging.csproj" />
+    <ProjectReference Include="..\..\src\modules\SkillHorizon.Workforce\SkillHorizon.Workforce.csproj" />
+    <ProjectReference Include="..\..\src\modules\SkillHorizon.Access\SkillHorizon.Access.csproj" />
+    <ProjectReference Include="..\..\src\modules\SkillHorizon.Taxonomy\SkillHorizon.Taxonomy.csproj" />
+    <ProjectReference Include="..\..\src\modules\SkillHorizon.JobArchitecture\SkillHorizon.JobArchitecture.csproj" />
+    <ProjectReference Include="..\..\src\modules\SkillHorizon.Benchmark\SkillHorizon.Benchmark.csproj" />
+    <ProjectReference Include="..\..\src\modules\SkillHorizon.Attestation\SkillHorizon.Attestation.csproj" />
+    <ProjectReference Include="..\..\src\modules\SkillHorizon.Activation\SkillHorizon.Activation.csproj" />
+    <ProjectReference Include="..\..\src\modules\SkillHorizon.Readiness\SkillHorizon.Readiness.csproj" />
+    <ProjectReference Include="..\..\src\modules\SkillHorizon.Audit\SkillHorizon.Audit.csproj" />
+  </ItemGroup>
+
+</Project>

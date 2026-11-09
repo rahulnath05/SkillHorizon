@@ -1,0 +1,213 @@
+:root {
+  color-scheme: light;
+  --canvas: #f5f7fa;
+  --surface: #ffffff;
+  --nested: #f1f4f9;
+  --text: #0f172a;
+  --text-secondary: #475569;
+  --text-meta: #64748b;
+  --brand: #2563eb;
+  --brand-hover: #1d4ed8;
+  --brand-tint: #ebf2fe;
+  --line: rgba(15, 23, 42, 0.06);
+  --shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.06);
+  --focus: #2563eb;
+  --rose-bg: #fff1f2;
+  --rose-text: #881337;
+  --rose-line: #ffe4e6;
+  --amber-bg: #fffbeb;
+  --amber-text: #78350f;
+  --amber-line: #fef3c7;
+  --info-bg: #eff6ff;
+  --info-text: #1e3a8a;
+  --info-line: #dbeafe;
+  font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--canvas);
+  color: var(--text);
+}
+
+.skip {
+  position: absolute;
+  left: 1rem;
+  top: -4rem;
+  background: var(--text);
+  color: white;
+  padding: 0.75rem 1rem;
+  border-radius: 999px;
+  z-index: 2;
+}
+
+.skip:focus { top: 1rem; }
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem 0;
+  max-width: 40rem;
+  margin: 0 auto;
+}
+
+.brand {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.wrap {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+
+.card {
+  background: var(--surface);
+  border-radius: 1.5rem;
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(0, 0, 0, 0.02);
+  padding: 1.75rem 1.5rem 1.5rem;
+}
+
+h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.6rem;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+}
+
+.lede, .hint, .choice-copy {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.hint { margin-top: 0.35rem; }
+
+.stack { display: grid; gap: 0.75rem; margin-top: 1.25rem; }
+
+.choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  width: 100%;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  padding: 0.9rem 1rem;
+  min-height: 44px;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.choice:hover { background: var(--nested); }
+
+.choice input {
+  margin-top: 0.2rem;
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--brand);
+}
+
+.choice-title {
+  display: block;
+  font-weight: 650;
+  font-size: 0.95rem;
+}
+
+.choice-copy { display: block; margin-top: 0.15rem; }
+
+.primary, .text-button {
+  font: inherit;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.primary {
+  border: 0;
+  border-radius: 999px;
+  background: var(--brand);
+  color: white;
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 0.7rem 1.25rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.primary:hover { background: var(--brand-hover); }
+
+.actions { margin-top: 1.25rem; }
+
+.text-button {
+  border: 0;
+  background: transparent;
+  color: var(--brand);
+  font-weight: 600;
+  padding: 0.4rem 0.2rem;
+}
+
+.signout { margin: 0; }
+
+.banner {
+  border-radius: 1rem;
+  padding: 0.9rem 1rem;
+  margin: 0 0 1rem;
+  line-height: 1.45;
+  font-size: 0.92rem;
+}
+
+.banner-rose { background: var(--rose-bg); color: var(--rose-text); border: 1px solid var(--rose-line); }
+.banner-amber { background: var(--amber-bg); color: var(--amber-text); border: 1px solid var(--amber-line); }
+.banner-info { background: var(--info-bg); color: var(--info-text); border: 1px solid var(--info-line); }
+
+.field-error {
+  color: #be123c;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin: 0.75rem 0 0;
+}
+
+.reference {
+  margin: 1rem 0.25rem 0;
+  color: var(--text-meta);
+  font-size: 0.75rem;
+}
+
+.mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+
+.empty { text-align: center; padding: 1.5rem 0.5rem 0.5rem; }
+
+.empty-mark {
+  width: 4rem;
+  height: 4rem;
+  margin: 0 auto 1rem;
+  border-radius: 999px;
+  background: var(--nested);
+  color: var(--text-meta);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+}
+
+a.primary { display: inline-flex; align-items: center; text-decoration: none; }
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 40rem) {
+  h1 { font-size: 1.4rem; }
+  .card { padding: 1.35rem 1.1rem 1.2rem; }
+}
