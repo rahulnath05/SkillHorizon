@@ -16,6 +16,16 @@ public sealed class SkillHorizonOptions
 
     public string ApiUrl { get; set; } = "";
 
+    public string LearningUrl { get; set; } = "";
+
+    public string AssessmentConnectionString { get; set; } = "";
+
+    public string ProgressConnectionString { get; set; } = "";
+
+    public string LearningServiceKeySecretName { get; set; } = "learning-service-key";
+
+    public int ZoneSittingBudget { get; set; } = 25000;
+
     public string SigningKeySecretName { get; set; } = "local-signing-key";
 
     public string RegistryKeySecretName { get; set; } = "registry-key";
@@ -31,6 +41,8 @@ public sealed class SkillHorizonOptions
     public bool SyncWorkforceOnStartup { get; set; } = true;
 
     public bool LoadStandardsFixture { get; set; } = true;
+
+    public bool LoadLearningFixture { get; set; } = true;
 
     public bool ReplicateReference { get; set; } = true;
 

@@ -8,7 +8,7 @@ public static class ZoneGateExtensions
     {
         app.Use(async (context, next) =>
         {
-            if (context.Request.Path.StartsWithSegments("/health"))
+            if (context.Request.Path.StartsWithSegments("/health") || context.Items[LearningServiceGate.Item] is true)
             {
                 await next().ConfigureAwait(false);
                 return;

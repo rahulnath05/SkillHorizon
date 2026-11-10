@@ -8,6 +8,8 @@ var builder = WebApplication.CreateBuilder(args);
 var options = builder.BindSkillHorizonOptions();
 if (string.IsNullOrWhiteSpace(options.ApiUrl))
     throw new InvalidOperationException("SkillHorizon:ApiUrl is required.");
+if (string.IsNullOrWhiteSpace(options.LearningUrl))
+    throw new InvalidOperationException("SkillHorizon:LearningUrl is required.");
 
 builder.AddSkillHorizonTelemetry("skillhorizon-web");
 builder.Services.AddSkillHorizonSecrets();
@@ -59,6 +61,12 @@ builder.Services.AddHttpClient<CoreApiClient>((serviceProvider, client) =>
 {
     var apiUrl = serviceProvider.GetRequiredService<IOptions<SkillHorizonOptions>>().Value.ApiUrl;
     client.BaseAddress = new Uri(apiUrl.TrimEnd('/') + "/");
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
+builder.Services.AddHttpClient<LearningApiClient>((serviceProvider, client) =>
+{
+    var learningUrl = serviceProvider.GetRequiredService<IOptions<SkillHorizonOptions>>().Value.LearningUrl;
+    client.BaseAddress = new Uri(learningUrl.TrimEnd('/') + "/");
     client.Timeout = TimeSpan.FromSeconds(10);
 });
 builder.Services.AddHealthChecks();

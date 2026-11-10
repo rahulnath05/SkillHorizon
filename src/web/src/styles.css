@@ -376,6 +376,48 @@ button { cursor: pointer; }
   opacity: 0.6;
 }
 
+.sitting-prompt {
+  margin: 18px 0 8px;
+  font-size: 16px;
+}
+
+.sitting-choices {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 0;
+  border: 0;
+}
+
+.sitting-choices label {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid rgba(23, 34, 31, 0.16);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.gap-list {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gap-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border: 1px solid rgba(23, 34, 31, 0.1);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
 .sr {
   position: absolute;
   width: 1px;

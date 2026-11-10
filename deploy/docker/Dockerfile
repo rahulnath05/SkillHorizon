@@ -13,7 +13,8 @@ COPY --from=web /out ./src/hosts/SkillHorizon.Web/wwwroot
 RUN dotnet publish src/hosts/SkillHorizon.Api/SkillHorizon.Api.csproj -c Release -o /app/api /p:UseAppHost=false \
  && dotnet publish src/hosts/SkillHorizon.Worker/SkillHorizon.Worker.csproj -c Release -o /app/worker /p:UseAppHost=false \
  && dotnet publish src/hosts/SkillHorizon.Control/SkillHorizon.Control.csproj -c Release -o /app/control /p:UseAppHost=false \
- && dotnet publish src/hosts/SkillHorizon.Web/SkillHorizon.Web.csproj -c Release -o /app/web /p:UseAppHost=false /p:SkipWebClientBuild=true
+ && dotnet publish src/hosts/SkillHorizon.Web/SkillHorizon.Web.csproj -c Release -o /app/web /p:UseAppHost=false /p:SkipWebClientBuild=true \
+ && dotnet publish src/hosts/SkillHorizon.Learning/SkillHorizon.Learning.csproj -c Release -o /app/learning /p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 USER root

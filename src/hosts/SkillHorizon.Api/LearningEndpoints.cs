@@ -1,0 +1,145 @@
+using SkillHorizon.Access;
+using SkillHorizon.Activation;
+using SkillHorizon.Hosting;
+using SkillHorizon.Readiness;
+
+namespace SkillHorizon.Api;
+
+public static class LearningEndpoints
+{
+    public static WebApplication MapLearning(this WebApplication app)
+    {
+        app.MapPost("/commands/activation/budget", SetBudget);
+        app.MapPost("/commands/waves/admit", Admit);
+        app.MapPost("/commands/sittings/authorize", Authorize);
+        app.MapGet("/assessment", Summary);
+        app.MapGet("/internal/sittings/authorizations", InternalGrant);
+        app.MapPost("/internal/results", ApplyResult);
+        app.MapGet("/employee/subject", EmployeeSubject);
+        return app;
+    }
+
+    private static Task<IResult> SetBudget(HttpContext context, IGrantCheck grants, IWaveAdmission waves, Microsoft.Extensions.Options.IOptions<SkillHorizon.Hosting.SkillHorizonOptions> options, BudgetRequest? body, CancellationToken cancellationToken) =>
+        LearningCommand(context, grants, cancellationToken, async () =>
+        {
+            await waves.SetBudgetAsync(options.Value.ZoneId, body?.SittingBudget ?? 0, cancellationToken).ConfigureAwait(false);
+            return Results.NoContent();
+        });
+
+    private static Task<IResult> Admit(HttpContext context, IGrantCheck grants, IWaveAdmission waves, Microsoft.Extensions.Options.IOptions<SkillHorizonOptions> options, AdmitRequest? body, CancellationToken cancellationToken) =>
+        LearningCommand(context, grants, cancellationToken, async () =>
+        {
+            if (body is null)
+                throw new InvalidOperationException("A wave needs a benchmark version and a population.");
+            var wave = await waves.AdmitAsync(options.Value.ZoneId, body.BenchmarkVersionId, body.SubjectIds ?? [], Subject(context), Correlation(context), cancellationToken).ConfigureAwait(false);
+            return Results.Ok(wave);
+        });
+
+    private static async Task<IResult> Authorize(HttpContext context, IGrantCheck grants, IWaveAdmission waves, AuthorizeRequest? body, CancellationToken cancellationToken)
+    {
+        var refused = await RefuseUnless(context, grants, Workspaces.Employee, cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        try
+        {
+            var issued = await waves.AuthorizeAsync(body?.WaveId ?? Guid.Empty, Subject(context), cancellationToken).ConfigureAwait(false);
+            return Results.Ok(new
+            {
+                issued.Token,
+                issued.Grant.AuthorizationId,
+                issued.Grant.WaveId,
+                issued.Grant.BenchmarkVersionId,
+                issued.Grant.Skills,
+                issued.Grant.Scale
+            });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Results.Problem(title: "Not admitted", detail: exception.Message, statusCode: StatusCodes.Status400BadRequest);
+        }
+    }
+
+    private static async Task<IResult> Summary(HttpContext context, IGrantCheck grants, IWaveAdmission waves, IPersonGap gap, CancellationToken cancellationToken)
+    {
+        var refused = await RefuseUnless(context, grants, Workspaces.Employee, cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        var subject = Subject(context);
+        var wave = await waves.CurrentWaveAsync(subject, cancellationToken).ConfigureAwait(false);
+        var gaps = await gap.ReadAsync(subject, cancellationToken).ConfigureAwait(false);
+        return Results.Ok(new { wave, gap = gaps });
+    }
+
+    private static async Task<IResult> InternalGrant(HttpContext context, IWaveAdmission waves, CancellationToken cancellationToken)
+    {
+        if (context.Items[LearningServiceGate.Item] is not true)
+            return Results.Unauthorized();
+        var token = context.Request.Headers["X-Sitting-Token"].ToString();
+        var grant = await waves.ReadGrantAsync(token, cancellationToken).ConfigureAwait(false);
+        return grant is null
+            ? Results.Problem(title: "Sitting refused", detail: "That sitting token is not active.", statusCode: StatusCodes.Status403Forbidden)
+            : Results.Ok(grant);
+    }
+
+    private static async Task<IResult> ApplyResult(HttpContext context, IPersonGap gap, ApplyResultRequest? body, CancellationToken cancellationToken)
+    {
+        if (context.Items[LearningServiceGate.Item] is not true)
+            return Results.Unauthorized();
+        try
+        {
+            if (body is null)
+                throw new InvalidOperationException("A sealed result needs an authorization and measured skills.");
+            var gaps = await gap.ApplyAsync(body.AuthorizationId, body.ResultId, body.Proficiencies ?? [], Correlation(context), cancellationToken).ConfigureAwait(false);
+            return Results.Ok(new { gap = gaps });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Results.Problem(title: "Result refused", detail: exception.Message, statusCode: StatusCodes.Status400BadRequest);
+        }
+    }
+
+    private static async Task<IResult> EmployeeSubject(HttpContext context, IGrantCheck grants, CancellationToken cancellationToken)
+    {
+        var refused = await RefuseUnless(context, grants, Workspaces.Employee, cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        return Results.Ok(new { subjectId = Subject(context) });
+    }
+
+    private static async Task<IResult> LearningCommand(HttpContext context, IGrantCheck grants, CancellationToken cancellationToken, Func<Task<IResult>> action)
+    {
+        var refused = await RefuseUnless(context, grants, Workspaces.LearningAndDevelopment, cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        try
+        {
+            return await action().ConfigureAwait(false);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Results.Problem(title: "Wave refused", detail: exception.Message, statusCode: StatusCodes.Status400BadRequest);
+        }
+    }
+
+    private static async Task<IResult?> RefuseUnless(HttpContext context, IGrantCheck grants, string workspace, CancellationToken cancellationToken)
+    {
+        var active = context.Request.Headers[SkillHorizonContext.WorkspaceHeader].ToString();
+        if (string.Equals(active, workspace, StringComparison.Ordinal)
+            && await grants.HasGrantAsync(Subject(context), workspace, cancellationToken).ConfigureAwait(false))
+            return null;
+        return Results.Problem(title: "Grant required", detail: "This command is refused for the active workspace.", statusCode: StatusCodes.Status403Forbidden);
+    }
+
+    private static string Subject(HttpContext context) => context.User.FindFirst("sub")?.Value ?? "";
+
+    private static string Correlation(HttpContext context) =>
+        context.Items[SkillHorizonContext.CorrelationItem]?.ToString() is { Length: > 0 } value ? value : "learning";
+
+    private sealed record BudgetRequest(int SittingBudget);
+
+    private sealed record AdmitRequest(Guid BenchmarkVersionId, string[]? SubjectIds);
+
+    private sealed record AuthorizeRequest(Guid WaveId);
+
+    private sealed record ApplyResultRequest(Guid AuthorizationId, Guid ResultId, MeasuredSkill[]? Proficiencies);
+}

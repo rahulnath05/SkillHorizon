@@ -11,6 +11,12 @@ public static class SchemaMigrator
     public static void ApplyControl(string connectionString) =>
         Apply(connectionString, ".Scripts.Control.");
 
+    public static void ApplyAssessment(string connectionString) =>
+        Apply(connectionString, ".Scripts.Assessment.");
+
+    public static void ApplyProgress(string connectionString) =>
+        Apply(connectionString, ".Scripts.Progress.");
+
     private static void Apply(string connectionString, string nameSegment)
     {
         var assembly = typeof(SchemaMigrator).Assembly;
