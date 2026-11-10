@@ -20,6 +20,7 @@ builder.Services.AddSkillHorizonModules();
 builder.Services.AddSkillHorizonMessaging(options);
 builder.Services.AddSingleton<RequireGrantFilter>();
 builder.Services.AddSingleton<StandardsFixture>();
+builder.Services.AddSingleton<LearningAdmissionFixture>();
 builder.Services.AddHealthChecks()
     .AddNpgSql(options.DomainConnectionString, name: "domain-postgres")
     .AddRedis(options.Redis, name: "redis");
@@ -35,8 +36,10 @@ app.UseSkillHorizonZoneGate();
 app.MapHealthChecks("/health");
 app.MapWorkforce();
 app.MapStandards();
+app.MapLearning();
 if (options.LoadStandardsFixture)
     app.Services.GetRequiredService<StandardsFixture>().LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
+app.Services.GetRequiredService<LearningAdmissionFixture>().LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
 app.MapGet("/access/workspaces", async (HttpContext context, IGrantCheck grants, CancellationToken cancellationToken) =>
 {
     var subject = context.User.FindFirst("sub")?.Value ?? "";

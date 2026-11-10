@@ -28,6 +28,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\hosts\SkillHorizon.Api\SkillHorizon.Api.csproj" Aliases="ApiHost" />
+    <ProjectReference Include="..\..\src\hosts\SkillHorizon.Learning\SkillHorizon.Learning.csproj" Aliases="LearningHost" />
     <ProjectReference Include="..\..\src\hosts\SkillHorizon.Worker\SkillHorizon.Worker.csproj" Aliases="WorkerHost" />
     <ProjectReference Include="..\..\src\hosts\SkillHorizon.Control\SkillHorizon.Control.csproj" Aliases="ControlHost" />
     <ProjectReference Include="..\..\src\hosts\SkillHorizon.Web\SkillHorizon.Web.csproj" Aliases="WebHost" />

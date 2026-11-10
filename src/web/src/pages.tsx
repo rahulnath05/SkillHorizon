@@ -3,7 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { chooseWorkspace, signIn, signOut, useShell } from "./api";
 import { activeWorkspaceCode, resolveDestination, type ShellState } from "./shell";
 import { Gate, Loading, Platform, useTitle } from "./ui";
-import { EmployeeStandards, PublishedStandards, StandardsAuthoring } from "./standards";
+import { Sitting } from "./sitting";
+import { PublishedStandards, StandardsAuthoring } from "./standards";
 import { TeamDirectory } from "./team";
 import { initials, workspaceCopy } from "./workspaces";
 
@@ -242,8 +243,8 @@ export function WorkspacePage() {
         <div className={wide ? "workspace-in team-in" : "workspace-in"}>
           {team ? <TeamDirectory /> : null}
           {authoring ? <StandardsAuthoring /> : null}
-          {code === "employee" ? <EmployeeStandards /> : null}
-          {team ? <PublishedStandards /> : null}
+          {code === "employee" ? <Sitting /> : null}
+          {published ? <PublishedStandards /> : null}
           {!team && !authoring && !published ? (
             <>
               <p className="eyebrow">Active workspace</p>

@@ -14,6 +14,13 @@ public static class SkillHorizonAuthenticationExtensions
                 return;
             }
 
+            if (await LearningServiceGate.AllowAsync(context).ConfigureAwait(false))
+            {
+                context.Items[LearningServiceGate.Item] = true;
+                await next().ConfigureAwait(false);
+                return;
+            }
+
             var header = context.Request.Headers.Authorization.ToString();
             var bearer = header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
                 ? header["Bearer ".Length..].Trim()

@@ -1,5 +1,6 @@
 extern alias ApiHost;
 extern alias ControlHost;
+extern alias LearningHost;
 extern alias WebHost;
 extern alias WorkerHost;
 
@@ -25,12 +26,17 @@ public sealed class FrameworkInfrastructure : IAsyncLifetime
     private Testcontainers.PostgreSql.PostgreSqlContainer? _postgres;
     private Testcontainers.Redis.RedisContainer? _redis;
 
+    public const string LearningKey = "local-learning-key";
+
     public string DomainConnection { get; private set; } = "";
     public string ControlConnection { get; private set; } = "";
+    public string AssessmentConnection { get; private set; } = "";
+    public string ProgressConnection { get; private set; } = "";
     public string RedisConnection { get; private set; } = "";
 
     public ApiFactory Api { get; private set; } = null!;
     public ControlFactory Control { get; private set; } = null!;
+    public LearningFactory Learning { get; private set; } = null!;
     public WorkerFactory Worker { get; private set; } = null!;
     public WebFactory Web { get; private set; } = null!;
     public LogCapture Logs { get; } = new();
@@ -71,6 +77,8 @@ public sealed class FrameworkInfrastructure : IAsyncLifetime
         }
 
         ControlConnection = controlBuilder.ConnectionString;
+        AssessmentConnection = await EnsureDatabase("skillhorizon_assessment");
+        ProgressConnection = await EnsureDatabase("skillhorizon_progress");
         Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Test");
         ApplyProcessConfiguration("control");
         Control = new ControlFactory(this);
@@ -89,6 +97,11 @@ public sealed class FrameworkInfrastructure : IAsyncLifetime
         {
         }
 
+        Learning = new LearningFactory(this);
+        using (var _ = Learning.CreateClient())
+        {
+        }
+
         Web = new WebFactory(this);
         using (var _ = Web.CreateClient())
         {
@@ -101,6 +114,8 @@ public sealed class FrameworkInfrastructure : IAsyncLifetime
     {
         if (Web is not null)
             await Web.DisposeAsync();
+        if (Learning is not null)
+            await Learning.DisposeAsync();
         if (Worker is not null)
             await Worker.DisposeAsync();
         if (Api is not null)
@@ -165,6 +180,22 @@ public sealed class FrameworkInfrastructure : IAsyncLifetime
         await grants.ExecuteNonQueryAsync();
     }
 
+    private async Task<string> EnsureDatabase(string database)
+    {
+        await using var connection = new NpgsqlConnection(DomainConnection);
+        await connection.OpenAsync();
+        await using var exists = new NpgsqlCommand("SELECT 1 FROM pg_database WHERE datname = $1", connection);
+        exists.Parameters.AddWithValue(database);
+        if (await exists.ExecuteScalarAsync() is null)
+        {
+            await using var create = new NpgsqlCommand($"CREATE DATABASE {database}", connection);
+            await create.ExecuteNonQueryAsync();
+        }
+
+        var builder = new NpgsqlConnectionStringBuilder(DomainConnection) { Database = database };
+        return builder.ConnectionString;
+    }
+
     private void ApplyProcessConfiguration(string zoneId)
     {
         Environment.SetEnvironmentVariable("SkillHorizon__ZoneId", zoneId);
@@ -178,7 +209,13 @@ public sealed class FrameworkInfrastructure : IAsyncLifetime
         Environment.SetEnvironmentVariable("SkillHorizon__PublishOutbox", "false");
         Environment.SetEnvironmentVariable("SkillHorizon__SyncWorkforceOnStartup", "false");
         Environment.SetEnvironmentVariable("SkillHorizon__LoadStandardsFixture", "false");
+        Environment.SetEnvironmentVariable("SkillHorizon__LoadLearningFixture", "false");
         Environment.SetEnvironmentVariable("SkillHorizon__ReplicateReference", "false");
+        Environment.SetEnvironmentVariable("SkillHorizon__AssessmentConnectionString", AssessmentConnection);
+        Environment.SetEnvironmentVariable("SkillHorizon__ProgressConnectionString", ProgressConnection);
+        Environment.SetEnvironmentVariable("SkillHorizon__LearningUrl", "http://learning");
+        Environment.SetEnvironmentVariable("SkillHorizon__LearningServiceKeySecretName", "learning-service-key");
+        Environment.SetEnvironmentVariable("SkillHorizon__Secrets__learning-service-key", LearningKey);
         Environment.SetEnvironmentVariable("SkillHorizon__SigningKeySecretName", "local-signing-key");
         Environment.SetEnvironmentVariable("SkillHorizon__RegistryKeySecretName", "registry-key");
         Environment.SetEnvironmentVariable("SkillHorizon__DevIdentities", DevIdentities);
@@ -231,7 +268,10 @@ public sealed class ApiFactory : WebApplicationFactory<ApiHost::Program>
         ["SkillHorizon:PublishOutbox"] = "false",
         ["SkillHorizon:SyncWorkforceOnStartup"] = "false",
         ["SkillHorizon:LoadStandardsFixture"] = "false",
+        ["SkillHorizon:LoadLearningFixture"] = "false",
         ["SkillHorizon:ReplicateReference"] = "false",
+        ["SkillHorizon:LearningServiceKeySecretName"] = "learning-service-key",
+        ["SkillHorizon:Secrets:learning-service-key"] = FrameworkInfrastructure.LearningKey,
         ["SkillHorizon:SigningKeySecretName"] = "local-signing-key",
         ["SkillHorizon:RegistryKeySecretName"] = "registry-key",
         ["SkillHorizon:Secrets:local-signing-key"] = FrameworkInfrastructure.SigningKey,
@@ -294,6 +334,7 @@ public sealed class WebFactory : WebApplicationFactory<WebHost::Program>
         builder.UseEnvironment("Test");
         var settings = ApiFactory.Shared(_infrastructure);
         settings["SkillHorizon:ApiUrl"] = "http://api";
+        settings["SkillHorizon:LearningUrl"] = "http://learning";
         settings["SkillHorizon:ZoneId"] = "local";
         builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(settings));
         builder.ConfigureTestServices(services =>
@@ -303,6 +344,49 @@ public sealed class WebFactory : WebApplicationFactory<WebHost::Program>
                 var handler = _infrastructure.Api.Server.CreateHandler();
                 var http = new HttpClient(handler, disposeHandler: false) { BaseAddress = new Uri("http://api/") };
                 return new WebShell.CoreApiClient(http);
+            });
+            services.AddSingleton<WebShell.LearningApiClient>(_ =>
+            {
+                var handler = _infrastructure.Learning.Server.CreateHandler();
+                var http = new HttpClient(handler, disposeHandler: false) { BaseAddress = new Uri("http://learning/") };
+                return new WebShell.LearningApiClient(http);
+            });
+        });
+    }
+}
+
+public sealed class LearningFactory : WebApplicationFactory<LearningHost::Program>
+{
+    private readonly FrameworkInfrastructure _infrastructure;
+
+    public LearningFactory(FrameworkInfrastructure infrastructure)
+    {
+        _infrastructure = infrastructure;
+    }
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        builder.UseEnvironment("Test");
+        builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["SkillHorizon:ZoneId"] = "local",
+            ["SkillHorizon:ApiUrl"] = "http://api",
+            ["SkillHorizon:AssessmentConnectionString"] = _infrastructure.AssessmentConnection,
+            ["SkillHorizon:ProgressConnectionString"] = _infrastructure.ProgressConnection,
+            ["SkillHorizon:EnableConsoleExporter"] = "false",
+            ["SkillHorizon:MigrateOnStartup"] = "true",
+            ["SkillHorizon:LoadLearningFixture"] = "false",
+            ["SkillHorizon:LearningServiceKeySecretName"] = "learning-service-key",
+            ["SkillHorizon:Secrets:learning-service-key"] = FrameworkInfrastructure.LearningKey
+        }));
+        builder.ConfigureTestServices(services =>
+        {
+            services.AddSingleton<ILoggerProvider>(new CaptureLoggerProvider(_infrastructure.Logs));
+            services.AddSingleton<LearningHost::CoreCaller>(_ =>
+            {
+                var handler = _infrastructure.Api.Server.CreateHandler();
+                var http = new HttpClient(handler, disposeHandler: false) { BaseAddress = new Uri("http://api/") };
+                return new LearningHost::CoreCaller(http);
             });
         });
     }

@@ -9,6 +9,7 @@
   <Folder Name="/src/hosts/">
     <Project Path="src/hosts/SkillHorizon.Api/SkillHorizon.Api.csproj" />
     <Project Path="src/hosts/SkillHorizon.Control/SkillHorizon.Control.csproj" />
+    <Project Path="src/hosts/SkillHorizon.Learning/SkillHorizon.Learning.csproj" />
     <Project Path="src/hosts/SkillHorizon.Web/SkillHorizon.Web.csproj" />
     <Project Path="src/hosts/SkillHorizon.Worker/SkillHorizon.Worker.csproj" />
   </Folder>

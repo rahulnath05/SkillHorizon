@@ -22,6 +22,11 @@ public static class ShellEndpoints
         app.MapPost("/api/workspace", (Delegate)Choose);
         app.MapGet("/api/team", (Delegate)Team);
         app.MapGet("/api/standards", (Delegate)Standards);
+        app.MapGet("/api/assessment", (Delegate)Assessment);
+        app.MapPost("/api/sittings/start", (Delegate)StartSitting);
+        app.MapPost("/api/sittings/answer", (Delegate)AnswerSitting);
+        app.MapPost("/api/sittings/seal", (Delegate)SealSitting);
+        app.MapPost("/api/progress/steps", (Delegate)AssignStep);
         app.MapPost("/api/benchmarks/draft", (Delegate)SaveBenchmark);
         app.MapPost("/api/benchmarks/publish", (Delegate)PublishBenchmark);
         app.MapGet("/signin/oidc", (Delegate)Oidc);
@@ -179,6 +184,157 @@ public static class ShellEndpoints
             return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
         var body = await ReadBody(http).ConfigureAwait(false);
         return await Proxy(http, HttpMethod.Post, "commands/benchmarks/draft", body).ConfigureAwait(false);
+    }
+
+    private static Task<IResult> Assessment(HttpContext http) =>
+        EmployeeProxy(http, HttpMethod.Get, "assessment", null);
+
+    private static async Task<IResult> StartSitting(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var refused = await EmployeeContext(http).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+
+        var body = await ReadBody(http).ConfigureAwait(false);
+        var reply = await Core(http, HttpMethod.Post, "commands/sittings/authorize", body).ConfigureAwait(false);
+        if (reply.Status != StatusCodes.Status200OK)
+            return Results.Text(reply.Body, "application/json", statusCode: reply.Status);
+
+        string? token;
+        try
+        {
+            using var authorized = JsonDocument.Parse(reply.Body);
+            token = authorized.RootElement.GetProperty("token").GetString();
+        }
+        catch (JsonException)
+        {
+            return Results.Problem(title: "Sitting refused", detail: "The sitting could not be opened.", statusCode: StatusCodes.Status502BadGateway);
+        }
+
+        var opened = await Learning(http, HttpMethod.Post, "sittings", token, null).ConfigureAwait(false);
+        if (opened.Status != StatusCodes.Status200OK)
+            return Results.Text(opened.Body, "application/json", statusCode: opened.Status);
+
+        try
+        {
+            var node = System.Text.Json.Nodes.JsonNode.Parse(opened.Body)?.AsObject()
+                ?? throw new JsonException();
+            node["token"] = token;
+            return Results.Text(node.ToJsonString(), "application/json");
+        }
+        catch (JsonException)
+        {
+            return Results.Problem(title: "Sitting refused", detail: "The sitting could not be opened.", statusCode: StatusCodes.Status502BadGateway);
+        }
+    }
+
+    private static async Task<IResult> AnswerSitting(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var refused = await EmployeeContext(http).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        return await ForwardSitting(http, "responses").ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> SealSitting(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var refused = await EmployeeContext(http).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        return await ForwardSitting(http, "seal").ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> AssignStep(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var refused = await EmployeeContext(http).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+
+        var body = await ReadBody(http).ConfigureAwait(false);
+        var session = await Session(http).ConfigureAwait(false);
+        if (session is null)
+            return Results.Unauthorized();
+        var learning = http.RequestServices.GetRequiredService<LearningApiClient>();
+        var reply = await learning.SendAsync(
+            HttpMethod.Post,
+            "progress/steps",
+            null,
+            session.Value.Bearer,
+            "employee",
+            Correlation(http),
+            body,
+            http.RequestAborted).ConfigureAwait(false);
+        return Results.Text(reply.Body, "application/json", statusCode: reply.Status);
+    }
+
+    private static async Task<IResult> ForwardSitting(HttpContext http, string action)
+    {
+        var body = await ReadBody(http).ConfigureAwait(false) ?? "{}";
+        string token;
+        Guid sittingId;
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            token = document.RootElement.GetProperty("token").GetString() ?? "";
+            sittingId = document.RootElement.GetProperty("sittingId").GetGuid();
+        }
+        catch (Exception exception) when (exception is JsonException or KeyNotFoundException or FormatException)
+        {
+            return Results.BadRequest(new { error = "The sitting could not be continued." });
+        }
+
+        var reply = await Learning(http, HttpMethod.Post, $"sittings/{sittingId}/{action}", token, action == "seal" ? null : body).ConfigureAwait(false);
+        return Results.Text(reply.Body, "application/json", statusCode: reply.Status);
+    }
+
+    private static async Task<IResult> EmployeeProxy(HttpContext http, HttpMethod method, string path, string? json)
+    {
+        var refused = await EmployeeContext(http).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        var reply = await Core(http, method, path, json).ConfigureAwait(false);
+        return Results.Text(reply.Body, "application/json", statusCode: reply.Status);
+    }
+
+    private static async Task<IResult?> EmployeeContext(HttpContext http)
+    {
+        http.Response.Headers.CacheControl = "no-store";
+        if (http.User.Identity?.IsAuthenticated != true)
+            return Results.Unauthorized();
+        var active = http.User.FindFirst("active_workspace")?.Value;
+        if (!string.Equals(active, "employee", StringComparison.Ordinal))
+            return Results.Json(new { error = "Choose the employee workspace first." }, statusCode: StatusCodes.Status403Forbidden);
+        return await Session(http).ConfigureAwait(false) is null ? Results.Unauthorized() : null;
+    }
+
+    private static async Task<ApiReply> Core(HttpContext http, HttpMethod method, string path, string? json)
+    {
+        var session = await Session(http).ConfigureAwait(false);
+        var api = http.RequestServices.GetRequiredService<CoreApiClient>();
+        return await api.SendAsync(method, path, "employee", session!.Value.Bearer, Correlation(http) ?? "", json, http.RequestAborted).ConfigureAwait(false);
+    }
+
+    private static async Task<ApiReply> Learning(HttpContext http, HttpMethod method, string path, string? token, string? json)
+    {
+        var learning = http.RequestServices.GetRequiredService<LearningApiClient>();
+        return await learning.SendAsync(method, path, token, null, null, Correlation(http), json, http.RequestAborted).ConfigureAwait(false);
+    }
+
+    private static async Task<(string Bearer, IdentityAssertion Assertion)?> Session(HttpContext http)
+    {
+        var assertion = Assertion(http.User);
+        if (assertion is null)
+            return null;
+        var bearer = await Bearer(http, assertion).ConfigureAwait(false);
+        return string.IsNullOrWhiteSpace(bearer) ? null : (bearer, assertion);
     }
 
     private static async Task<IResult> PublishBenchmark(HttpContext http)

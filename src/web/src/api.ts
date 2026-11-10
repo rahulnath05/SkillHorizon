@@ -155,6 +155,70 @@ export async function saveBenchmarkDraft(body: {
   if (!response.ok) throw new Error(await readError(response));
 }
 
+export type SkillGap = {
+  skillName: string;
+  currentName: string;
+  currentRank: number;
+  targetName: string;
+  targetRank: number;
+};
+
+export type AssessmentSummary = {
+  wave: { waveId: string; profileName: string; population: number } | null;
+  gap: SkillGap[];
+};
+
+export type SittingChoice = { rank: number; label: string };
+
+export type SittingItem = {
+  itemId: string;
+  skillCode: string;
+  prompt: string;
+  choices: SittingChoice[];
+};
+
+export type OpenSitting = {
+  token: string;
+  sittingId: string;
+  item: SittingItem | null;
+  readyToSeal: boolean;
+};
+
+export async function getAssessment(): Promise<AssessmentSummary> {
+  const response = await fetch("/api/assessment", {
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error(await readError(response));
+  const body = (await response.json()) as AssessmentSummary;
+  return { wave: body.wave ?? null, gap: body.gap ?? [] };
+}
+
+export async function startSitting(waveId: string): Promise<OpenSitting> {
+  const response = await postJson("/api/sittings/start", { waveId });
+  if (!response.ok) throw new Error(await readError(response));
+  return (await response.json()) as OpenSitting;
+}
+
+export async function answerSitting(body: {
+  token: string;
+  sittingId: string;
+  itemId: string;
+  rank: number;
+}): Promise<OpenSitting> {
+  const response = await postJson("/api/sittings/answer", body);
+  if (!response.ok) throw new Error(await readError(response));
+  const next = (await response.json()) as Omit<OpenSitting, "token">;
+  return { token: body.token, sittingId: body.sittingId, item: next.item ?? null, readyToSeal: next.readyToSeal };
+}
+
+export async function sealSitting(body: { token: string; sittingId: string }): Promise<SkillGap[]> {
+  const response = await postJson("/api/sittings/seal", body);
+  if (!response.ok) throw new Error(await readError(response));
+  const sealed = (await response.json()) as { gap?: SkillGap[] };
+  return sealed.gap ?? [];
+}
+
 export async function publishBenchmark(benchmarkVersionId: string): Promise<void> {
   const response = await postJson("/api/benchmarks/publish", { benchmarkVersionId });
   if (!response.ok) throw new Error(await readError(response));

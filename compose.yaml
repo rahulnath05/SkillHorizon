@@ -71,6 +71,7 @@ services:
       SkillHorizon__DomainConnectionString: Host=postgres;Port=5432;Database=skillhorizon_domain;Username=skillhorizon;Password=skillhorizon
       SkillHorizon__Redis: redis:6379
       SkillHorizon__ControlRegistryUrl: http://control:8080
+      SKILLHORIZON_SECRET_LEARNING_SERVICE_KEY: local-learning-key
     depends_on:
       postgres:
         condition: service_healthy
@@ -103,6 +104,26 @@ services:
       - "8083:8080"
     healthcheck: *health
 
+  learning:
+    <<: *app
+    working_dir: /app/learning
+    command: ["dotnet", "SkillHorizon.Learning.dll"]
+    environment:
+      <<: *runtime
+      SkillHorizon__ZoneId: local
+      SkillHorizon__ApiUrl: http://api:8080
+      SkillHorizon__AssessmentConnectionString: Host=postgres;Port=5432;Database=skillhorizon_assessment;Username=skillhorizon;Password=skillhorizon
+      SkillHorizon__ProgressConnectionString: Host=postgres;Port=5432;Database=skillhorizon_progress;Username=skillhorizon;Password=skillhorizon
+      SKILLHORIZON_SECRET_LEARNING_SERVICE_KEY: local-learning-key
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    ports:
+      - "8084:8080"
+    healthcheck: *health
+
   web:
     <<: *app
     working_dir: /app/web
@@ -111,9 +132,12 @@ services:
       <<: *runtime
       SkillHorizon__ZoneId: local
       SkillHorizon__ApiUrl: http://api:8080
+      SkillHorizon__LearningUrl: http://learning:8080
       SkillHorizon__DevIdentities: person-multi|LE-LOCAL|person-multi;person-single|LE-LOCAL|person-single;person-unmapped|LE-OTHER|person-unmapped;person-nogrant|LE-LOCAL|person-nogrant;person-ld|LE-LOCAL|person-ld
     depends_on:
       api:
+        condition: service_healthy
+      learning:
         condition: service_healthy
     ports:
       - "8080:8080"

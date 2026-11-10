@@ -7,11 +7,6 @@ export function StandardsAuthoring() {
   return <StandardsPanel mode="authoring" primary />;
 }
 
-export function EmployeeStandards() {
-  useTitle("Published benchmark");
-  return <StandardsPanel mode="published" primary />;
-}
-
 export function PublishedStandards() {
   return <StandardsPanel mode="published" primary={false} />;
 }
