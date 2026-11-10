@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { chooseWorkspace, signIn, signOut, useShell } from "./api";
 import { activeWorkspaceCode, resolveDestination, type ShellState } from "./shell";
 import { Gate, Loading, Platform, useTitle } from "./ui";
+import { TeamDirectory } from "./team";
 import { initials, workspaceCopy } from "./workspaces";
 
 const signInLede = "Skills intelligence for the whole firm. Choose the account you want to sign in with. This chooses who you are. It does not choose a workspace.";
@@ -230,14 +231,19 @@ export function WorkspacePage() {
   if (!shell || !code || destinationFor(shell) !== "/workspace") return <Loading label="Loading SkillHorizon…" />;
 
   const copy = workspaceCopy(code);
+  const team = code === "people_manager";
   return (
     <Platform shell={shell}>
-      <main className="workspace" id="main" data-screen="workspace">
-        <div className="workspace-in">
-          <p className="eyebrow">Active workspace</p>
-          <h1>{copy.label}</h1>
-          <p>{copy.detail}</p>
-          <p>This shell is empty. The workspace opens here when its features are built.</p>
+      <main className="workspace" id="main" data-screen="workspace" data-workspace={code}>
+        <div className={team ? "workspace-in team-in" : "workspace-in"}>
+          {team ? <TeamDirectory /> : (
+            <>
+              <p className="eyebrow">Active workspace</p>
+              <h1>{copy.label}</h1>
+              <p>{copy.detail}</p>
+              <p>This shell is empty. The workspace opens here when its features are built.</p>
+            </>
+          )}
           {shell.workspaces.length > 1 ? (
             <p><Link to="/entry">Choose a different workspace</Link></p>
           ) : null}

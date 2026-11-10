@@ -28,6 +28,8 @@ public sealed class SkillHorizonOptions
 
     public bool PublishOutbox { get; set; } = true;
 
+    public bool SyncWorkforceOnStartup { get; set; } = true;
+
     public OidcOptions Oidc { get; set; } = new();
 }
 

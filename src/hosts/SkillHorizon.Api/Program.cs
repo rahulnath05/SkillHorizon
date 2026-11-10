@@ -32,6 +32,7 @@ app.UseSkillHorizonRequestLogging();
 app.UseSkillHorizonAuthentication();
 app.UseSkillHorizonZoneGate();
 app.MapHealthChecks("/health");
+app.MapWorkforce();
 app.MapGet("/access/workspaces", async (HttpContext context, IGrantCheck grants, CancellationToken cancellationToken) =>
 {
     var subject = context.User.FindFirst("sub")?.Value ?? "";

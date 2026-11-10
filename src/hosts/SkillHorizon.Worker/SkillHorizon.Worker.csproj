@@ -16,6 +16,7 @@
     <ProjectReference Include="..\..\building-blocks\SkillHorizon.Composition\SkillHorizon.Composition.csproj" />
     <ProjectReference Include="..\..\building-blocks\SkillHorizon.Database\SkillHorizon.Database.csproj" />
     <ProjectReference Include="..\..\building-blocks\SkillHorizon.Messaging\SkillHorizon.Messaging.csproj" />
+    <ProjectReference Include="..\..\modules\SkillHorizon.Workforce\SkillHorizon.Workforce.csproj" />
   </ItemGroup>
 
 </Project>

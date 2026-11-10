@@ -4,9 +4,9 @@ Working checklists for the build. The short order is [the sequencing note](../ar
 
 ## Current
 
-Next slice: [01 Workforce](01-workforce.md).
+Next slice: [02 Benchmarks](02-benchmarks.md).
 
-Slice 00a replaced the temporary .NET screens with the React application in `src/web`. Persona screens wait for their own slices.
+Slice 01 Workforce is done. HR is projected into the zone, workspace grants follow that projection, and a people manager sees only their direct reports.
 
 ## Status rule
 
@@ -26,7 +26,7 @@ At the start of a build session, read `Current` and open that child. Do the firs
 |-------|------|--------|
 | 00 Framework | [00-framework.md](00-framework.md) | done |
 | 00a Web | [00a-web.md](00a-web.md) | done |
-| 01 Workforce | [01-workforce.md](01-workforce.md) | not-started |
+| 01 Workforce | [01-workforce.md](01-workforce.md) | done |
 | 02 Benchmarks | [02-benchmarks.md](02-benchmarks.md) | not-started |
 | 03 Learning | [03-learning.md](03-learning.md) | not-started |
 | 04 Paths | [04-paths.md](04-paths.md) | not-started |
