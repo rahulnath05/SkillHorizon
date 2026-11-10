@@ -2,7 +2,7 @@
 
 The product interface is React in `src/web`, built with Vite. Do not add product screens as Razor, Blazor, or HTML strings in `SkillHorizon.Web`. That host keeps the session, OpenID Connect, and health, and serves the React build.
 
-Slice 00 left a temporary .NET shell in `src/hosts/SkillHorizon.Web/ShellHtml.cs`, `wwwroot/shell.css`, and the HTML results in `ShellEndpoints.cs`. The next UI slice deletes those screens and rebuilds them in React. See `docs/plans/00a-web.md`.
+Sign-in, refusal, and workspace entry are the React screens from slice 00a. Later slices add persona screens in the same app. See `docs/plans/00a-web.md`.
 
 The application must look like the HTML in `docs/reference/persona-htmls`.
 

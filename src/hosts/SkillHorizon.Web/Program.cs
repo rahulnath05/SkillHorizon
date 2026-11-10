@@ -12,7 +12,14 @@ if (string.IsNullOrWhiteSpace(options.ApiUrl))
 builder.AddSkillHorizonTelemetry("skillhorizon-web");
 builder.Services.AddSkillHorizonSecrets();
 builder.Services.AddSkillHorizonIdentity(options);
-builder.Services.AddAntiforgery();
+builder.Services.AddAntiforgery(antiforgery =>
+{
+    antiforgery.HeaderName = "RequestVerificationToken";
+    antiforgery.Cookie.Name = "skillhorizon.antiforgery";
+    antiforgery.Cookie.HttpOnly = true;
+    antiforgery.Cookie.SameSite = SameSiteMode.Lax;
+    antiforgery.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+});
 builder.Services.AddAuthorization();
 
 var authentication = builder.Services

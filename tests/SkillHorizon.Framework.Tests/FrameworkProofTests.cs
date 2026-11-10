@@ -1,5 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using SkillHorizon.Messaging;
@@ -102,41 +105,74 @@ public sealed class FrameworkProofTests
     [Fact]
     public async Task Web_shell_refuses_an_unmapped_person_and_asks_when_several_workspaces_are_held()
     {
+        using var anonymous = Client();
+        var signInPage = await anonymous.GetAsync("/signin");
+        var signInHtml = await signInPage.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.OK, signInPage.StatusCode);
+        Assert.Contains("id=\"root\"", signInHtml, StringComparison.Ordinal);
+        Assert.DoesNotContain("shell.css", signInHtml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Plus Jakarta", signInHtml, StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync("/shell.css")).StatusCode);
+
+        foreach (var path in new[] { "/", "/signin", "/entry", "/workspace", "/refused" })
+        {
+            var page = await anonymous.GetAsync(path);
+            Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+            Assert.Equal("text/html", page.Content.Headers.ContentType?.MediaType);
+        }
+
+        var bundle = await ClientBundle(anonymous, signInHtml);
+        Assert.Contains("#112b27", bundle, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("#f3f1eb", bundle, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Choose a workspace", bundle, StringComparison.Ordinal);
+        Assert.Contains("not mapped to a zone", bundle, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Active workspace", bundle, StringComparison.Ordinal);
+        Assert.DoesNotContain("Aarav Mehta", bundle, StringComparison.Ordinal);
+        Assert.DoesNotContain("switch-persona", bundle, StringComparison.Ordinal);
+        Assert.DoesNotContain("choice-title", bundle, StringComparison.Ordinal);
+
+        var directory = await ReadShell(anonymous);
+        Assert.False(directory.Authenticated);
+        Assert.Equal(
+            ["person-multi", "person-single", "person-unmapped", "person-nogrant"],
+            directory.Identities.Select(identity => identity.SubjectId).ToArray());
+        Assert.Empty(directory.Workspaces);
+
         using var unmapped = Client();
-        var refused = await Follow(unmapped, await SignIn(unmapped, "person-unmapped"));
-        var refusedHtml = await refused.Content.ReadAsStringAsync();
-        Assert.Contains("not mapped to a zone", refusedHtml, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Choose a workspace", refusedHtml, StringComparison.Ordinal);
+        var refused = await SignIn(unmapped, "person-unmapped");
+        Assert.Equal("refused", refused.Status);
+        Assert.Equal("unmapped", refused.Reason);
+        Assert.Empty(refused.Workspaces);
+        Assert.Null(refused.ActiveWorkspace);
+        Assert.Equal("/refused?reason=unmapped", Destination(refused));
 
         using var several = Client();
-        var entry = await Follow(several, await SignIn(several, "person-multi"));
-        var entryHtml = await entry.Content.ReadAsStringAsync();
-        Assert.Contains("Choose a workspace", entryHtml, StringComparison.Ordinal);
-        Assert.Contains("Employee", entryHtml, StringComparison.Ordinal);
-        Assert.Contains("People manager", entryHtml, StringComparison.Ordinal);
-        Assert.DoesNotContain("Platform admin", entryHtml, StringComparison.Ordinal);
-        Assert.DoesNotContain("Competency lead", entryHtml, StringComparison.Ordinal);
-        Assert.DoesNotContain("L&amp;D", entryHtml, StringComparison.Ordinal);
+        var entry = await SignIn(several, "person-multi");
+        Assert.Equal(["employee", "people_manager"], entry.Workspaces);
+        Assert.Null(entry.ActiveWorkspace);
+        Assert.Equal("/entry", Destination(entry));
+        Assert.DoesNotContain("platform_admin", entry.Workspaces);
+        Assert.DoesNotContain("competency_lead", entry.Workspaces);
+        Assert.DoesNotContain("learning_and_development", entry.Workspaces);
 
-        var token = InputValue(entryHtml, "__RequestVerificationToken");
-        using var choose = new FormUrlEncodedContent(new Dictionary<string, string>
-        {
-            ["workspace"] = "people_manager",
-            ["__RequestVerificationToken"] = token
-        });
-        var chosen = await Follow(several, await several.PostAsync("/entry", choose));
-        var shell = await chosen.Content.ReadAsStringAsync();
-        Assert.Contains("People manager", shell, StringComparison.Ordinal);
-        Assert.Contains("Active workspace", shell, StringComparison.Ordinal);
-        Assert.Contains("Choose a different workspace", shell, StringComparison.Ordinal);
+        var denied = await Post(several, "/api/workspace", new { workspace = "platform_admin" }, entry.RequestToken);
+        Assert.Equal(HttpStatusCode.BadRequest, denied.StatusCode);
+        Assert.Contains("not held", await denied.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+        Assert.Null((await ReadShell(several)).ActiveWorkspace);
+
+        var chosen = await Post(several, "/api/workspace", new { workspace = "people_manager" }, (await ReadShell(several)).RequestToken);
+        Assert.Equal(HttpStatusCode.NoContent, chosen.StatusCode);
+        var active = await ReadShell(several);
+        Assert.Equal("people_manager", active.ActiveWorkspace);
+        Assert.Equal(["employee", "people_manager"], active.Workspaces);
+        Assert.Equal("/workspace", Destination(active));
 
         using var single = Client();
-        var direct = await Follow(single, await SignIn(single, "person-single"));
-        var directHtml = await direct.Content.ReadAsStringAsync();
-        Assert.Contains("Active workspace", directHtml, StringComparison.Ordinal);
-        Assert.Contains("Employee", directHtml, StringComparison.Ordinal);
-        Assert.DoesNotContain("Choose a workspace", directHtml, StringComparison.Ordinal);
-        Assert.DoesNotContain("People manager", directHtml, StringComparison.Ordinal);
+        var direct = await SignIn(single, "person-single");
+        Assert.Equal(["employee"], direct.Workspaces);
+        Assert.Equal("employee", direct.ActiveWorkspace);
+        Assert.Equal("/workspace", Destination(direct));
+        Assert.DoesNotContain("people_manager", direct.Workspaces);
     }
 
     private HttpClient Client() =>
@@ -146,41 +182,70 @@ public sealed class FrameworkProofTests
             HandleCookies = true
         });
 
-    private static async Task<HttpResponseMessage> SignIn(HttpClient client, string subjectId)
+    private static async Task<ShellDocument> SignIn(HttpClient client, string subjectId)
     {
-        var page = await client.GetAsync("/signin");
-        var html = await page.Content.ReadAsStringAsync();
-        var token = InputValue(html, "__RequestVerificationToken");
-        using var form = new FormUrlEncodedContent(new Dictionary<string, string>
-        {
-            ["subjectId"] = subjectId,
-            ["__RequestVerificationToken"] = token
-        });
-        return await client.PostAsync("/signin", form);
+        var shell = await ReadShell(client);
+        var response = await Post(client, "/api/signin", new { subjectId }, shell.RequestToken);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        return await ReadShell(client);
     }
 
-    private static async Task<HttpResponseMessage> Follow(HttpClient client, HttpResponseMessage response)
+    private static async Task<ShellDocument> ReadShell(HttpClient client)
     {
-        for (var hop = 0; hop < 6 && (int)response.StatusCode is >= 300 and < 400; hop++)
+        var response = await client.GetAsync("/api/shell");
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.True(response.StatusCode == HttpStatusCode.OK, body);
+        return JsonSerializer.Deserialize<ShellDocument>(body, JsonSerializerOptions.Web)
+            ?? throw new InvalidOperationException(body);
+    }
+
+    private static async Task<HttpResponseMessage> Post(HttpClient client, string path, object body, string token)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, path);
+        request.Headers.Add("RequestVerificationToken", token);
+        request.Content = JsonContent.Create(body);
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<string> ClientBundle(HttpClient client, string html)
+    {
+        var bundle = "";
+        foreach (Match match in AssetPattern.Matches(html))
         {
-            var location = response.Headers.Location ?? throw new InvalidOperationException("Missing redirect.");
-            var uri = location.IsAbsoluteUri ? location : new Uri(client.BaseAddress!, location);
-            response = await client.GetAsync(uri);
+            var asset = await client.GetAsync(match.Groups[1].Value);
+            asset.EnsureSuccessStatusCode();
+            bundle += await asset.Content.ReadAsStringAsync();
         }
 
-        return response;
+        Assert.NotEqual(0, bundle.Length);
+        return bundle;
     }
 
-    private static string InputValue(string html, string name)
+    private static string Destination(ShellDocument shell)
     {
-        var marker = $"name=\"{name}\" value=\"";
-        var start = html.IndexOf(marker, StringComparison.Ordinal);
-        if (start < 0)
-            throw new InvalidOperationException($"Input {name} was not on the page. {html}");
-        start += marker.Length;
-        var end = html.IndexOf('"', start);
-        return WebUtility.HtmlDecode(html[start..end]);
+        if (!shell.Authenticated || shell.Status == "unauthenticated") return "/signin";
+        if (shell.Status == "unavailable") return "/refused?reason=unavailable";
+        if (shell.Status == "refused") return "/refused?reason=unmapped";
+        if (shell.Workspaces.Length == 0) return "/refused?reason=grant";
+        if (shell.Workspaces.Length == 1) return "/workspace";
+        if (!string.IsNullOrEmpty(shell.ActiveWorkspace) && shell.Workspaces.Contains(shell.ActiveWorkspace))
+            return "/workspace";
+        return "/entry";
     }
+
+    private static readonly Regex AssetPattern = new("""(?:src|href)="([^"]+\.(?:js|css))""", RegexOptions.IgnoreCase);
+
+    private sealed record ShellIdentity(string SubjectId, string LegalEntityId, string DisplayName);
+
+    private sealed record ShellDocument(
+        bool Authenticated,
+        bool LocalDevelopment,
+        string Status,
+        string? Reason,
+        string[] Workspaces,
+        string? ActiveWorkspace,
+        ShellIdentity[] Identities,
+        string RequestToken);
 
     private async Task<HttpResponseMessage> SendCommand(HttpClient client, string subjectId, string legalEntityId, string workspace)
     {

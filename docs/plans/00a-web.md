@@ -2,7 +2,7 @@
 
 Parent: [Master plan](README.md)
 
-Status: `not-started`
+Status: `done`
 
 Depends on [00 Framework](00-framework.md) being `done`. The .NET hosts, databases, sign-in port, and grant check stay. This slice replaces the user interface.
 
@@ -51,9 +51,9 @@ Workforce sync, benchmarks, assessment items, and Mira. Persona pages beyond the
 
 | Step | Work | Status |
 |------|------|--------|
-| 00a.1 | Create `src/web` with Vite, React, and TypeScript. Carry the color, type, and spacing from `SkillHorizon-Shell.html` | not-started |
-| 00a.2 | Delete `ShellHtml.cs` and `wwwroot/shell.css`. Remove the HTML responses from `ShellEndpoints.cs` | not-started |
-| 00a.3 | Serve the React build from `SkillHorizon.Web`. Keep session, OpenID Connect, and health | not-started |
-| 00a.4 | React sign-in and refused screens, matching the shell HTML | not-started |
-| 00a.5 | React workspace entry screen, shown only when the person holds more than one workspace. One workspace opens directly | not-started |
-| 00a.6 | Prove `person-multi` sees the entry screen, `person-single` does not, and `person-unmapped` is refused. The .NET HTML shell is gone | not-started |
+| 00a.1 | Create `src/web` with Vite, React, and TypeScript. Carry the color, type, and spacing from `SkillHorizon-Shell.html` | done |
+| 00a.2 | Delete `ShellHtml.cs` and `wwwroot/shell.css`. Remove the HTML responses from `ShellEndpoints.cs` | done |
+| 00a.3 | Serve the React build from `SkillHorizon.Web`. Keep session, OpenID Connect, and health | done |
+| 00a.4 | React sign-in and refused screens, matching the shell HTML | done |
+| 00a.5 | React workspace entry screen, shown only when the person holds more than one workspace. One workspace opens directly | done |
+| 00a.6 | Prove `person-multi` sees the entry screen, `person-single` does not, and `person-unmapped` is refused. The .NET HTML shell is gone | done |

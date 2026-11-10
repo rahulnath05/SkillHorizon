@@ -1,6 +1,5 @@
 using System.Security.Claims;
-using System.Text;
-using System.Text.Encodings.Web;
+using System.Text.Json;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -13,57 +12,82 @@ public static class ShellEndpoints
 {
     public static WebApplication MapSkillHorizonShell(this WebApplication app)
     {
-        app.MapGet("/signin", (Delegate)SignInPage);
-        app.MapPost("/signin", (Delegate)SignIn);
-        app.MapPost("/signout", (Delegate)SignOut);
-        app.MapGet("/", (Delegate)Enter);
-        app.MapGet("/entry", (Delegate)EntryPage);
-        app.MapPost("/entry", (Delegate)Choose);
-        app.MapGet("/workspace", (Delegate)WorkspacePage);
-        app.MapGet("/refused", (Delegate)RefusedPage);
+        app.MapGet("/api/shell", async (HttpContext http) =>
+        {
+            http.Response.Headers.CacheControl = "no-store";
+            return Results.Ok(await Describe(http).ConfigureAwait(false));
+        });
+        app.MapPost("/api/signin", (Delegate)SignIn);
+        app.MapPost("/api/signout", (Delegate)SignOut);
+        app.MapPost("/api/workspace", (Delegate)Choose);
+        app.MapGet("/signin/oidc", (Delegate)Oidc);
+        app.MapFallback(ServeClient);
         return app;
     }
 
-    private static async Task<IResult> SignInPage(HttpContext http)
+    private static async Task ServeClient(HttpContext http, IWebHostEnvironment environment)
     {
-        var identity = http.RequestServices.GetRequiredService<IIdentityProvider>();
-        if (!identity.IsLocalDevelopment)
+        if (!HttpMethods.IsGet(http.Request.Method) && !HttpMethods.IsHead(http.Request.Method))
         {
-            return Results.Challenge(
-                new AuthenticationProperties { RedirectUri = "/" },
-                [OpenIdConnectDefaults.AuthenticationScheme]);
+            http.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
         }
 
-        if (http.User.Identity?.IsAuthenticated == true)
-            return Results.Redirect("/");
+        var path = http.Request.Path.Value ?? "";
+        if (path.StartsWith("/api", StringComparison.OrdinalIgnoreCase) || Path.HasExtension(path))
+        {
+            http.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
 
-        return ShellHtml.Page(
-            "Sign in",
-            SignInMain(http, identity.DevelopmentIdentities, null),
-            Correlation(http),
-            null);
+        var root = environment.WebRootPath;
+        var index = string.IsNullOrEmpty(root) ? "" : Path.Combine(root, "index.html");
+        if (index.Length == 0 || !File.Exists(index))
+        {
+            http.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+            http.Response.ContentType = "text/plain; charset=utf-8";
+            await http.Response.WriteAsync("The web client has not been built.").ConfigureAwait(false);
+            return;
+        }
+
+        http.Response.ContentType = "text/html; charset=utf-8";
+        http.Response.Headers.CacheControl = "no-cache";
+        await http.Response.SendFileAsync(index, http.RequestAborted).ConfigureAwait(false);
+    }
+
+    private static IResult Oidc(HttpContext http)
+    {
+        var identity = http.RequestServices.GetRequiredService<IIdentityProvider>();
+        if (identity.IsLocalDevelopment || http.User.Identity?.IsAuthenticated == true)
+            return Results.Redirect(http.User.Identity?.IsAuthenticated == true ? "/" : "/signin");
+
+        return Results.Challenge(
+            new AuthenticationProperties { RedirectUri = "/" },
+            [OpenIdConnectDefaults.AuthenticationScheme]);
     }
 
     private static async Task<IResult> SignIn(HttpContext http)
     {
         if (!await IsValidForm(http).ConfigureAwait(false))
-            return Results.BadRequest();
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
 
         var identity = http.RequestServices.GetRequiredService<IIdentityProvider>();
         if (!identity.IsLocalDevelopment)
-            return Results.Redirect("/signin");
+            return Results.BadRequest(new { error = "Sign in with the organisation identity provider." });
 
-        var form = await http.Request.ReadFormAsync(http.RequestAborted).ConfigureAwait(false);
-        var subject = form["subjectId"].ToString();
-        var match = identity.FindDevelopmentIdentity(subject);
-        if (match is null)
+        SignInRequest? body;
+        try
         {
-            return ShellHtml.Page(
-                "Sign in",
-                SignInMain(http, identity.DevelopmentIdentities, "That identity is not in the local development directory."),
-                Correlation(http),
-                null);
+            body = await http.Request.ReadFromJsonAsync<SignInRequest>(http.RequestAborted).ConfigureAwait(false);
         }
+        catch (JsonException)
+        {
+            return Results.BadRequest(new { error = "That identity is not in the local development directory." });
+        }
+
+        var match = identity.FindDevelopmentIdentity(body?.SubjectId?.Trim() ?? "");
+        if (match is null)
+            return Results.BadRequest(new { error = "That identity is not in the local development directory." });
 
         var claims = new List<Claim>
         {
@@ -75,142 +99,88 @@ public static class ShellEndpoints
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme));
         await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal).ConfigureAwait(false);
-        return Results.Redirect("/");
+        return Results.NoContent();
     }
 
     private static async Task<IResult> SignOut(HttpContext http)
     {
         if (!await IsValidForm(http).ConfigureAwait(false))
-            return Results.BadRequest();
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
 
         await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme).ConfigureAwait(false);
-        return Results.Redirect("/signin");
-    }
-
-    private static async Task<IResult> Enter(HttpContext http)
-    {
-        if (http.User.Identity?.IsAuthenticated != true)
-            return Results.Redirect("/signin");
-
-        var lookup = await Lookup(http).ConfigureAwait(false);
-        if (lookup.Status == WorkspaceLookupStatus.Unauthenticated)
-            return Results.Redirect("/signin");
-        if (lookup.Status == WorkspaceLookupStatus.Unavailable)
-            return UnavailablePage(http);
-        if (lookup.Status == WorkspaceLookupStatus.Refused)
-            return Results.Redirect("/refused?reason=unmapped");
-        if (lookup.Workspaces.Count == 0)
-            return Results.Redirect("/refused?reason=grant");
-
-        var active = http.User.FindFirst("active_workspace")?.Value;
-        if (lookup.Workspaces.Count == 1)
-        {
-            if (active != lookup.Workspaces[0])
-                await RememberWorkspace(http, lookup.Workspaces[0]).ConfigureAwait(false);
-            return Results.Redirect("/workspace");
-        }
-
-        if (!string.IsNullOrWhiteSpace(active) && lookup.Workspaces.Contains(active, StringComparer.Ordinal))
-            return Results.Redirect("/workspace");
-
-        return Results.Redirect("/entry");
-    }
-
-    private static async Task<IResult> EntryPage(HttpContext http, string? error)
-    {
-        if (http.User.Identity?.IsAuthenticated != true)
-            return Results.Redirect("/signin");
-
-        var lookup = await Lookup(http).ConfigureAwait(false);
-        if (lookup.Status != WorkspaceLookupStatus.Ok)
-            return Results.Redirect("/");
-        if (lookup.Workspaces.Count < 2)
-            return Results.Redirect("/");
-
-        return ShellHtml.Page(
-            "Choose a workspace",
-            EntryMain(http, lookup.Workspaces, error),
-            Correlation(http),
-            TokenFields(http));
+        return Results.NoContent();
     }
 
     private static async Task<IResult> Choose(HttpContext http)
     {
         if (!await IsValidForm(http).ConfigureAwait(false))
-            return Results.BadRequest();
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
         if (http.User.Identity?.IsAuthenticated != true)
-            return Results.Redirect("/signin");
+            return Results.Unauthorized();
 
-        var form = await http.Request.ReadFormAsync(http.RequestAborted).ConfigureAwait(false);
-        var workspace = form["workspace"].ToString();
+        WorkspaceRequest? body;
+        try
+        {
+            body = await http.Request.ReadFromJsonAsync<WorkspaceRequest>(http.RequestAborted).ConfigureAwait(false);
+        }
+        catch (JsonException)
+        {
+            return Results.BadRequest(new { error = "That workspace is not held." });
+        }
+
+        var workspace = body?.Workspace?.Trim() ?? "";
         var lookup = await Lookup(http).ConfigureAwait(false);
-        if (lookup.Status != WorkspaceLookupStatus.Ok || lookup.Workspaces.Count < 2)
-            return Results.Redirect("/");
-        if (!lookup.Workspaces.Contains(workspace, StringComparer.Ordinal))
-            return await EntryPage(http, "That workspace is not held.").ConfigureAwait(false);
+        if (lookup.Status != WorkspaceLookupStatus.Ok || !lookup.Workspaces.Contains(workspace, StringComparer.Ordinal))
+            return Results.BadRequest(new { error = "That workspace is not held." });
 
         await RememberWorkspace(http, workspace).ConfigureAwait(false);
-        return Results.Redirect("/workspace");
+        return Results.NoContent();
     }
 
-    private static async Task<IResult> WorkspacePage(HttpContext http)
+    private static async Task<ShellState> Describe(HttpContext http)
     {
-        if (http.User.Identity?.IsAuthenticated != true)
-            return Results.Redirect("/signin");
+        var identityProvider = http.RequestServices.GetRequiredService<IIdentityProvider>();
+        var correlationId = Correlation(http);
+        var requestToken = Token(http);
+        var authenticated = http.User.Identity?.IsAuthenticated == true;
+        if (!authenticated)
+        {
+            var identities = identityProvider.IsLocalDevelopment
+                ? identityProvider.DevelopmentIdentities
+                    .Select(identity => new ShellIdentity(identity.SubjectId, identity.LegalEntityId, identity.DisplayName))
+                    .ToArray()
+                : [];
+            return new ShellState(false, identityProvider.IsLocalDevelopment, null, null, null, "unauthenticated", null, [], null, identities, correlationId, requestToken);
+        }
 
+        var subject = http.User.FindFirst("sub")?.Value;
+        var displayName = http.User.FindFirst("display_name")?.Value
+            ?? http.User.FindFirst(ClaimTypes.Name)?.Value
+            ?? subject;
+        var legalEntity = http.User.FindFirst("legal_entity")?.Value;
         var lookup = await Lookup(http).ConfigureAwait(false);
-        if (lookup.Status != WorkspaceLookupStatus.Ok)
-            return Results.Redirect("/");
+        if (lookup.Status == WorkspaceLookupStatus.Unauthenticated)
+            return new ShellState(true, identityProvider.IsLocalDevelopment, subject, displayName, legalEntity, "unauthenticated", null, [], null, [], correlationId, requestToken);
+        if (lookup.Status == WorkspaceLookupStatus.Unavailable)
+            return new ShellState(true, identityProvider.IsLocalDevelopment, subject, displayName, legalEntity, "unavailable", null, [], null, [], correlationId, requestToken);
+        if (lookup.Status == WorkspaceLookupStatus.Refused)
+            return new ShellState(true, identityProvider.IsLocalDevelopment, subject, displayName, legalEntity, "refused", "unmapped", [], null, [], correlationId, requestToken);
+        if (lookup.Workspaces.Count == 0)
+            return new ShellState(true, identityProvider.IsLocalDevelopment, subject, displayName, legalEntity, "ok", "grant", [], null, [], correlationId, requestToken);
 
-        var active = http.User.FindFirst("active_workspace")?.Value;
-        if (string.IsNullOrWhiteSpace(active) || !lookup.Workspaces.Contains(active, StringComparer.Ordinal))
-            return Results.Redirect(lookup.Workspaces.Count > 1 ? "/entry" : "/");
-
-        var label = WorkspaceText.Label(active);
-        var detail = WorkspaceText.Detail(active);
-        var switcher = lookup.Workspaces.Count > 1
-            ? """<p class="actions"><a class="text-button" href="/entry">Choose a different workspace</a></p>"""
-            : "";
-        var main = $"""
-            <p class="hint">Active workspace</p>
-            <h1>{ShellHtml.Encode(label)}</h1>
-            <p class="lede">{ShellHtml.Encode(detail)}</p>
-            <p class="lede">This shell is empty. The workspace opens here when its features are built.</p>
-            {switcher}
-            """;
-        return ShellHtml.Page(label, main, Correlation(http), TokenFields(http));
+        var active = await AlignWorkspace(http, lookup.Workspaces, http.User.FindFirst("active_workspace")?.Value).ConfigureAwait(false);
+        return new ShellState(true, identityProvider.IsLocalDevelopment, subject, displayName, legalEntity, "ok", null, lookup.Workspaces, active, [], correlationId, requestToken);
     }
 
-    private static IResult RefusedPage(HttpContext http, string? reason)
+    private static async Task<string?> AlignWorkspace(HttpContext http, IReadOnlyList<string> workspaces, string? active)
     {
-        var unmapped = !string.Equals(reason, "grant", StringComparison.Ordinal);
-        var title = unmapped ? "Not mapped to a zone" : "No workspace is held";
-        var text = unmapped
-            ? "You are not mapped to a zone. SkillHorizon will not place an unmapped person into another zone."
-            : "No workspace is held for this sign-in, so there is nothing to open.";
-        var signedIn = http.User.Identity?.IsAuthenticated == true;
-        return ShellHtml.Page(
-            title,
-            $"""
-             {ShellHtml.Banner("rose", text)}
-             <h1>{ShellHtml.Encode(title)}</h1>
-             <p class="lede">Sign out, then try a different identity if you are using the local development provider.</p>
-             """,
-            Correlation(http),
-            signedIn ? TokenFields(http) : null);
+        var next = workspaces.Count == 1
+            ? workspaces[0]
+            : workspaces.Contains(active ?? "", StringComparer.Ordinal) ? active : null;
+        if (!string.Equals(next, string.IsNullOrWhiteSpace(active) ? null : active, StringComparison.Ordinal))
+            await RememberWorkspace(http, next).ConfigureAwait(false);
+        return next;
     }
-
-    private static IResult UnavailablePage(HttpContext http) =>
-        ShellHtml.Page(
-            "Routing unavailable",
-            $"""
-             {ShellHtml.Banner("amber", "Zone routing is unavailable. This sign-in was not placed in another zone.")}
-             <h1>Routing unavailable</h1>
-             <p class="lede">The control registry could not be reached. Try again in a moment.</p>
-             <p class="actions"><a class="primary" href="/">Try again</a></p>
-             """,
-            Correlation(http),
-            http.User.Identity?.IsAuthenticated == true ? TokenFields(http) : null);
 
     private static async Task<WorkspaceLookup> Lookup(HttpContext http)
     {
@@ -246,95 +216,22 @@ public static class ShellEndpoints
         return await http.GetTokenAsync("access_token").ConfigureAwait(false);
     }
 
-    private static async Task RememberWorkspace(HttpContext http, string workspace)
+    private static async Task RememberWorkspace(HttpContext http, string? workspace)
     {
         var identity = (ClaimsIdentity)http.User.Identity!;
         var clone = identity.Clone();
         foreach (var claim in clone.FindAll("active_workspace").ToList())
             clone.RemoveClaim(claim);
-        clone.AddClaim(new Claim("active_workspace", workspace));
+        if (!string.IsNullOrWhiteSpace(workspace))
+            clone.AddClaim(new Claim("active_workspace", workspace));
         await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(clone))
             .ConfigureAwait(false);
     }
 
-    private static string SignInMain(HttpContext http, IReadOnlyList<DevelopmentIdentity> identities, string? error)
-    {
-        if (identities.Count == 0)
-        {
-            return """
-                <div class="empty">
-                  <div class="empty-mark" aria-hidden="true">ID</div>
-                  <h1>Sign in</h1>
-                  <p class="lede">No development identities are configured for the local identity provider.</p>
-                </div>
-                """;
-        }
-
-        var choices = new StringBuilder();
-        foreach (var identity in identities)
-        {
-            var subject = ShellHtml.Encode(identity.SubjectId);
-            var legalEntity = ShellHtml.Encode(identity.LegalEntityId);
-            choices.Append($$"""
-                <label class="choice">
-                  <input type="radio" name="subjectId" value="{{subject}}" required>
-                  <span>
-                    <span class="choice-title">{{subject}}</span>
-                    <span class="choice-copy">Legal entity {{legalEntity}}</span>
-                  </span>
-                </label>
-                """);
-        }
-
-        var alert = string.IsNullOrWhiteSpace(error) ? "" : ShellHtml.Banner("rose", error);
-        return $"""
-            {alert}
-            <h1>Sign in</h1>
-            <p class="lede">Local development identity provider. This chooses who you are. It does not choose a workspace.</p>
-            <form method="post" action="/signin">
-              {TokenFields(http)}
-              <div class="stack">{choices}</div>
-              <div class="actions"><button type="submit" class="primary">Continue</button></div>
-            </form>
-            """;
-    }
-
-    private static string EntryMain(HttpContext http, IReadOnlyList<string> workspaces, string? error)
-    {
-        var choices = new StringBuilder();
-        foreach (var workspace in workspaces)
-        {
-            var code = ShellHtml.Encode(workspace);
-            choices.Append($$"""
-                <button type="submit" class="choice" name="workspace" value="{{code}}">
-                  <span>
-                    <span class="choice-title">{{ShellHtml.Encode(WorkspaceText.Label(workspace))}}</span>
-                    <span class="choice-copy">{{ShellHtml.Encode(WorkspaceText.Detail(workspace))}}</span>
-                  </span>
-                </button>
-                """);
-        }
-
-        var alert = string.IsNullOrWhiteSpace(error)
-            ? ShellHtml.Banner("info", "You hold more than one workspace. Enter the one you are working in now.")
-            : ShellHtml.Banner("rose", error);
-        return $"""
-            {alert}
-            <h1>Choose a workspace</h1>
-            <p class="lede">The list is only the workspaces this sign-in holds.</p>
-            <form method="post" action="/entry">
-              {TokenFields(http)}
-              <div class="stack">{choices}</div>
-            </form>
-            """;
-    }
-
-    private static string TokenFields(HttpContext http)
+    private static string Token(HttpContext http)
     {
         var tokens = http.RequestServices.GetRequiredService<IAntiforgery>().GetAndStoreTokens(http);
-        var name = HtmlEncoder.Default.Encode(tokens.FormFieldName ?? "");
-        var value = HtmlEncoder.Default.Encode(tokens.RequestToken ?? "");
-        return $"""<input type="hidden" name="{name}" value="{value}">""";
+        return tokens.RequestToken ?? "";
     }
 
     private static async Task<bool> IsValidForm(HttpContext http)
@@ -352,4 +249,24 @@ public static class ShellEndpoints
 
     private static string? Correlation(HttpContext http) =>
         http.Items[SkillHorizonContext.CorrelationItem]?.ToString();
+
+    private sealed record SignInRequest(string? SubjectId);
+
+    private sealed record WorkspaceRequest(string? Workspace);
+
+    private sealed record ShellIdentity(string SubjectId, string LegalEntityId, string DisplayName);
+
+    private sealed record ShellState(
+        bool Authenticated,
+        bool LocalDevelopment,
+        string? SubjectId,
+        string? DisplayName,
+        string? LegalEntityId,
+        string Status,
+        string? Reason,
+        IReadOnlyList<string> Workspaces,
+        string? ActiveWorkspace,
+        IReadOnlyList<ShellIdentity> Identities,
+        string? CorrelationId,
+        string RequestToken);
 }

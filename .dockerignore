@@ -8,4 +8,8 @@ tests
 docs
 **/*.md
 .env
+.env.*
+!.env.example
 **/*.user
+**/node_modules
+**/wwwroot

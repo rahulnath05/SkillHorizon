@@ -5,6 +5,7 @@ Thumbs.db
 !.env.example
 node_modules/
 dist/
+src/hosts/SkillHorizon.Web/wwwroot/
 *.log
 .cursor/*
 !.cursor/environment.json

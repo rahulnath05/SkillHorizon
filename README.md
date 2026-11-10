@@ -6,7 +6,7 @@ This repository is the real solution. The interactive prototype under `D:\Accele
 
 ## Current work
 
-Framework is done. Next slice is 01 Workforce, and it is not started.
+Slice 00a Web is done. Next slice is 01 Workforce, and it is not started.
 
 Start at [docs/plans/README.md](docs/plans/README.md). Architecture decisions stay in [docs/architecture/README.md](docs/architecture/README.md).
 
