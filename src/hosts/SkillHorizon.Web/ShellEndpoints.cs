@@ -21,6 +21,9 @@ public static class ShellEndpoints
         app.MapPost("/api/signout", (Delegate)SignOut);
         app.MapPost("/api/workspace", (Delegate)Choose);
         app.MapGet("/api/team", (Delegate)Team);
+        app.MapGet("/api/standards", (Delegate)Standards);
+        app.MapPost("/api/benchmarks/draft", (Delegate)SaveBenchmark);
+        app.MapPost("/api/benchmarks/publish", (Delegate)PublishBenchmark);
         app.MapGet("/signin/oidc", (Delegate)Oidc);
         app.MapFallback(ServeClient);
         return app;
@@ -165,6 +168,54 @@ public static class ShellEndpoints
             TeamLookupStatus.Unavailable => Results.Json(new { error = "The team list could not be loaded." }, statusCode: StatusCodes.Status503ServiceUnavailable),
             _ => Results.Json(new { error = "Direct reports are read from the people manager workspace." }, statusCode: StatusCodes.Status403Forbidden)
         };
+    }
+
+    private static Task<IResult> Standards(HttpContext http) =>
+        Proxy(http, HttpMethod.Get, "standards", null);
+
+    private static async Task<IResult> SaveBenchmark(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var body = await ReadBody(http).ConfigureAwait(false);
+        return await Proxy(http, HttpMethod.Post, "commands/benchmarks/draft", body).ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> PublishBenchmark(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var body = await ReadBody(http).ConfigureAwait(false);
+        return await Proxy(http, HttpMethod.Post, "commands/benchmarks/publish", body).ConfigureAwait(false);
+    }
+
+    private static async Task<string?> ReadBody(HttpContext http)
+    {
+        using var reader = new StreamReader(http.Request.Body);
+        var body = await reader.ReadToEndAsync(http.RequestAborted).ConfigureAwait(false);
+        return body.Length == 0 ? "{}" : body;
+    }
+
+    private static async Task<IResult> Proxy(HttpContext http, HttpMethod method, string path, string? json)
+    {
+        http.Response.Headers.CacheControl = "no-store";
+        if (http.User.Identity?.IsAuthenticated != true)
+            return Results.Unauthorized();
+
+        var active = http.User.FindFirst("active_workspace")?.Value;
+        if (string.IsNullOrWhiteSpace(active))
+            return Results.Json(new { error = "Choose a workspace first." }, statusCode: StatusCodes.Status403Forbidden);
+
+        var assertion = Assertion(http.User);
+        if (assertion is null)
+            return Results.Unauthorized();
+        var bearer = await Bearer(http, assertion).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(bearer))
+            return Results.Unauthorized();
+
+        var api = http.RequestServices.GetRequiredService<CoreApiClient>();
+        var reply = await api.SendAsync(method, path, active, bearer, Correlation(http) ?? "", json, http.RequestAborted).ConfigureAwait(false);
+        return Results.Text(reply.Body, "application/json", statusCode: reply.Status);
     }
 
     private static async Task<ShellState> Describe(HttpContext http)

@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { chooseWorkspace, signIn, signOut, useShell } from "./api";
 import { activeWorkspaceCode, resolveDestination, type ShellState } from "./shell";
 import { Gate, Loading, Platform, useTitle } from "./ui";
+import { EmployeeStandards, PublishedStandards, StandardsAuthoring } from "./standards";
 import { TeamDirectory } from "./team";
 import { initials, workspaceCopy } from "./workspaces";
 
@@ -232,18 +233,25 @@ export function WorkspacePage() {
 
   const copy = workspaceCopy(code);
   const team = code === "people_manager";
+  const authoring = code === "learning_and_development";
+  const published = code === "employee" || code === "people_manager";
+  const wide = team || authoring || published;
   return (
     <Platform shell={shell}>
       <main className="workspace" id="main" data-screen="workspace" data-workspace={code}>
-        <div className={team ? "workspace-in team-in" : "workspace-in"}>
-          {team ? <TeamDirectory /> : (
+        <div className={wide ? "workspace-in team-in" : "workspace-in"}>
+          {team ? <TeamDirectory /> : null}
+          {authoring ? <StandardsAuthoring /> : null}
+          {code === "employee" ? <EmployeeStandards /> : null}
+          {team ? <PublishedStandards /> : null}
+          {!team && !authoring && !published ? (
             <>
               <p className="eyebrow">Active workspace</p>
               <h1>{copy.label}</h1>
               <p>{copy.detail}</p>
               <p>This shell is empty. The workspace opens here when its features are built.</p>
             </>
-          )}
+          ) : null}
           {shell.workspaces.length > 1 ? (
             <p><Link to="/entry">Choose a different workspace</Link></p>
           ) : null}

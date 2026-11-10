@@ -17,6 +17,9 @@
     <ProjectReference Include="..\..\building-blocks\SkillHorizon.Database\SkillHorizon.Database.csproj" />
     <ProjectReference Include="..\..\building-blocks\SkillHorizon.Messaging\SkillHorizon.Messaging.csproj" />
     <ProjectReference Include="..\..\modules\SkillHorizon.Access\SkillHorizon.Access.csproj" />
+    <ProjectReference Include="..\..\modules\SkillHorizon.Benchmark\SkillHorizon.Benchmark.csproj" />
+    <ProjectReference Include="..\..\modules\SkillHorizon.JobArchitecture\SkillHorizon.JobArchitecture.csproj" />
+    <ProjectReference Include="..\..\modules\SkillHorizon.Taxonomy\SkillHorizon.Taxonomy.csproj" />
     <ProjectReference Include="..\..\modules\SkillHorizon.Workforce\SkillHorizon.Workforce.csproj" />
   </ItemGroup>
 

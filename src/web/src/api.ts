@@ -42,8 +42,9 @@ async function postJson(path: string, body: unknown): Promise<Response> {
 
 async function readError(response: Response): Promise<string> {
   try {
-    const body = (await response.json()) as { error?: string };
+    const body = (await response.json()) as { error?: string; detail?: string };
     if (body.error) return body.error;
+    if (body.detail) return body.detail;
   } catch {
     // The host answered without a JSON body.
   }
@@ -77,6 +78,86 @@ export async function getTeam(): Promise<DirectReport[]> {
   if (!response.ok) throw new Error(await readError(response));
   const body = (await response.json()) as { people?: DirectReport[] };
   return body.people ?? [];
+}
+
+export type FrameworkLevel = {
+  levelId: string;
+  code: string;
+  name: string;
+  rank: number;
+};
+
+export type FrameworkProfile = {
+  profileId: string;
+  code: string;
+  name: string;
+  levelName: string;
+  levelRank: number;
+};
+
+export type FrameworkView = {
+  frameworkId: string;
+  code: string;
+  name: string;
+  levels: FrameworkLevel[];
+  profiles: FrameworkProfile[];
+};
+
+export type SkillTarget = {
+  skillId: string;
+  skillName: string;
+  competencyName: string;
+  practiceName: string;
+  proficiencyRank: number;
+  proficiencyName: string;
+};
+
+export type BenchmarkVersion = {
+  benchmarkVersionId: string;
+  jobProfileId: string;
+  profileName: string;
+  levelName: string;
+  levelRank: number;
+  taxonomyVersionId: string;
+  versionNumber: number;
+  status: string;
+  targets: SkillTarget[];
+};
+
+export type Proficiency = {
+  code: string;
+  name: string;
+  rank: number;
+};
+
+export type Standards = {
+  source: "authoring" | "reference";
+  frameworks: FrameworkView[];
+  drafts: { draft: BenchmarkVersion; proficiencies: Proficiency[] }[];
+  history: BenchmarkVersion[];
+};
+
+export async function getStandards(): Promise<Standards> {
+  const response = await fetch("/api/standards", {
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error(await readError(response));
+  return (await response.json()) as Standards;
+}
+
+export async function saveBenchmarkDraft(body: {
+  jobProfileId: string;
+  taxonomyVersionId: string;
+  targets: { skillId: string; proficiencyRank: number }[];
+}): Promise<void> {
+  const response = await postJson("/api/benchmarks/draft", body);
+  if (!response.ok) throw new Error(await readError(response));
+}
+
+export async function publishBenchmark(benchmarkVersionId: string): Promise<void> {
+  const response = await postJson("/api/benchmarks/publish", { benchmarkVersionId });
+  if (!response.ok) throw new Error(await readError(response));
 }
 
 export async function signOut(): Promise<void> {

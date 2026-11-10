@@ -4,9 +4,9 @@ Working checklists for the build. The short order is [the sequencing note](../ar
 
 ## Current
 
-Next slice: [02 Benchmarks](02-benchmarks.md).
+Next slice: [03 Learning](03-learning.md).
 
-Slice 01 Workforce is done. HR is projected into the zone, workspace grants follow that projection, and a people manager sees only their direct reports.
+Slice 02 is done. A taxonomy version and a benchmark can be published against a job profile. The published version is immutable, a change is a new version, and history is queryable. Only the published copy is in the zone reference store. Slice 03 is `not-started`.
 
 ## Status rule
 
@@ -27,7 +27,7 @@ At the start of a build session, read `Current` and open that child. Do the firs
 | 00 Framework | [00-framework.md](00-framework.md) | done |
 | 00a Web | [00a-web.md](00a-web.md) | done |
 | 01 Workforce | [01-workforce.md](01-workforce.md) | done |
-| 02 Benchmarks | [02-benchmarks.md](02-benchmarks.md) | not-started |
+| 02 Benchmarks | [02-benchmarks.md](02-benchmarks.md) | done |
 | 03 Learning | [03-learning.md](03-learning.md) | not-started |
 | 04 Paths | [04-paths.md](04-paths.md) | not-started |
 | 05 Practice | [05-practice.md](05-practice.md) | not-started |
