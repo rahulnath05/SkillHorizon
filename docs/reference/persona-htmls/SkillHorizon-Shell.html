@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="SkillHorizon skills intelligence" />
+<title>SkillHorizon — Employee</title>
+<style>
+:root {
+--ink: #17221f;
+--muted: #69746f;
+--paper: #f3f1eb;
+--surface: #fbfaf6;
+--forest: #112b27;
+--forest-2: #173b35;
+--mint: #9fd4c5;
+--amber: #d98942;
+--line: rgba(255, 255, 255, 0.12);
+--shell-height: 44px;
+color-scheme: light;
+font-family: "DM Sans", "Segoe UI", system-ui, sans-serif;
+}
+{ box-sizing: border-box; }
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: var(--paper); color: var(--ink); }
+button, select { font: inherit; }
+.platform {
+display: grid;
+grid-template-rows: var(--shell-height) minmax(0, 1fr);
+width: 100%;
+height: 100%;
+}
+.platform-bar {
+position: relative;
+z-index: 10;
+display: flex;
+align-items: center;
+gap: 14px;
+min-width: 0;
+padding: 0 16px;
+color: #edf4ef;
+background: var(--forest);
+border-bottom: 1px solid var(--line);
+}
+.platform-brand {
+display: flex;
+align-items: center;
+gap: 9px;
+min-width: 0;
+}
+.platform-mark {
+display: grid;
+place-items: center;
+width: 28px;
+height: 28px;
+flex: 0 0 auto;
+border-radius: 50%;
+color: var(--forest);
+background: var(--amber);
+box-shadow: inset 0 0 0 6px var(--forest-2);
+font-size: 9px;
+font-weight: 800;
+}
+.platform-brand strong {
+overflow: hidden;
+font-size: 13px;
+text-overflow: ellipsis;
+white-space: nowrap;
+}
+.prototype-note {
+padding: 3px 7px;
+border: 1px solid var(--line);
+border-radius: 999px;
+color: rgba(237, 244, 239, 0.55);
+font-size: 8px;
+font-weight: 700;
+letter-spacing: 0.08em;
+text-transform: uppercase;
+white-space: nowrap;
+}
+.persona-control {
+display: flex;
+align-items: center;
+gap: 8px;
+margin-left: auto;
+}
+.persona-control label {
+color: rgba(237, 244, 239, 0.58);
+font-size: 9px;
+font-weight: 700;
+letter-spacing: 0.08em;
+text-transform: uppercase;
+white-space: nowrap;
+}
+.persona-control select {
+min-width: 158px;
+height: 34px;
+padding: 0 34px 0 11px;
+color: var(--ink);
+background: var(--surface);
+border: 1px solid rgba(255, 255, 255, 0.18);
+border-radius: 8px;
+font-size: 11px;
+font-weight: 700;
+cursor: pointer;
+}
+.persona-control select:focus-visible {
+outline: 3px solid rgba(159, 212, 197, 0.45);
+outline-offset: 1px;
+}
+.persona-host {
+position: relative;
+min-width: 0;
+min-height: 0;
+overflow: hidden;
+background: var(--paper);
+}
+.persona-frame {
+position: absolute;
+inset: 0;
+display: block;
+width: 100%;
+height: 100%;
+border: 0;
+background: var(--paper);
+}
+.persona-frame[hidden] { display: none; }
+.loading {
+position: absolute;
+inset: 0;
+z-index: 2;
+display: grid;
+place-items: center;
+color: var(--muted);
+background: var(--paper);
+font-size: 12px;
+}
+.loading[hidden] { display: none; }
+.loading-card {
+display: flex;
+align-items: center;
+gap: 11px;
+padding: 13px 16px;
+background: var(--surface);
+border: 1px solid rgba(23, 34, 31, 0.12);
+border-radius: 12px;
+}
+.spinner {
+width: 15px;
+height: 15px;
+border: 2px solid rgba(91, 152, 137, 0.2);
+border-top-color: #5b9889;
+border-radius: 50%;
+animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.sr-only {
+position: absolute;
+width: 1px;
+height: 1px;
+padding: 0;
+margin: -1px;
+overflow: hidden;
+clip: rect(0, 0, 0, 0);
+white-space: nowrap;
+border: 0;
+}
+@media (max-width: 620px) {
+.platform-bar { padding: 0 10px; gap: 8px; }
+.prototype-note, .persona-control label { display: none; }
+.persona-control select { min-width: 145px; }
+.platform-brand strong { max-width: 110px; }
+}
+@media (prefers-reduced-motion: reduce) {
+.spinner { animation: none; }
+}
+
+/* ---------------- sign-in gate ---------------- */
+.gate{position:fixed;inset:0;z-index:50;overflow:auto;
+  background:radial-gradient(circle at 72% -12%,rgba(217,137,66,.18),transparent 32rem),var(--forest)}
+.gate.gone{display:none}
+.gate{display:grid;place-items:center}
+.gate-in{width:100%;max-width:1000px;margin:0 auto;padding:48px 24px}
+.gate-head{text-align:center;margin-bottom:34px;color:#eef5f0}
+.gate-mark{display:inline-grid;place-items:center;width:46px;height:46px;border-radius:50%;
+  background:var(--amber);color:var(--forest-2);font-weight:800;font-size:17px;
+  box-shadow:inset 0 0 0 9px var(--forest-2);margin-bottom:16px}
+.gate-head h1{font-family:"Manrope",system-ui,sans-serif;font-size:30px;margin:0 0 9px;letter-spacing:-.02em}
+.gate-head p{margin:0;font-size:13px;color:rgba(237,244,239,.6);line-height:1.6}
+
+.gate-sso{max-width:430px;margin:0 auto;background:#fbfaf6;color:#17221f;border-radius:16px;
+  padding:30px 30px 26px;box-shadow:0 22px 70px rgba(10,24,20,.34);text-align:center}
+.gate-sso .sso-mark{display:inline-grid;place-items:center;width:46px;height:46px;border-radius:50%;
+  background:#173b35;color:#d98942;font-family:"Manrope",system-ui,sans-serif;font-weight:700;font-size:17px}
+.gate-sso h2{font-family:"Manrope",system-ui,sans-serif;font-size:21px;margin:14px 0 7px;letter-spacing:-.01em}
+.gate-sso .sso-sub{margin:0 0 20px;font-size:12.5px;color:#69746f;line-height:1.55}
+.gate-sso .sso-go{display:block;width:100%;padding:13px;border:0;border-radius:10px;background:#173b35;
+  color:#eef5f0;font:inherit;font-size:13.5px;font-weight:700;cursor:pointer}
+.gate-sso .sso-go:hover{background:#24574e}
+.gate-sso .sso-meta{margin:11px 0 0;font-size:11px;color:#8b948f}
+.gate-sso .sso-note{margin:19px 0 0;padding-top:17px;border-top:1px solid rgba(23,34,31,.1);
+  text-align:left;font-size:11.5px;color:#69746f;line-height:1.65}
+.gate-sso .sso-note b{color:#17221f}
+.gate-sso .sso-back{margin:15px 0 0;background:0;border:0;font:inherit;font-size:11.5px;
+  color:#69746f;cursor:pointer;text-decoration:underline}
+.gate-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(258px,1fr));gap:12px}
+.gate-grid[hidden],.gate-sso[hidden]{display:none}
+.gate-card{display:flex;gap:13px;align-items:flex-start;text-align:left;width:100%;
+  padding:16px 17px;border-radius:14px;cursor:pointer;font:inherit;color:#eef5f0;
+  background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.1);
+  transition:background .15s,border-color .15s,transform .15s}
+.gate-card:hover{background:rgba(255,255,255,.1);border-color:rgba(159,212,197,.45);transform:translateY(-1px)}
+.gate-card:focus-visible{outline:3px solid rgba(159,212,197,.5);outline-offset:2px}
+.gate-av{flex:0 0 auto;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;
+  background:var(--mint);color:#07201b;font-weight:700;font-size:13px}
+.gate-card b{display:block;font-size:13.5px;line-height:1.3}
+.gate-card span:not(.gate-av){display:block;font-size:11px;color:rgba(237,244,239,.58);margin-top:2px}
+.gate-card em{display:block;font-style:normal;font-size:11px;color:rgba(237,244,239,.78);
+  margin-top:7px;line-height:1.55}
+.gate-foot{margin:26px 0 0;text-align:center;font-size:11px;color:rgba(237,244,239,.45)}
+
+/* ---------------- signed-in chip ---------------- */
+.who-chip{display:flex;align-items:center;gap:9px;margin-left:auto;padding:5px 9px 5px 5px;
+  border-radius:999px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);
+  color:#eef5f0;font:inherit;cursor:pointer}
+.who-chip:hover{background:rgba(255,255,255,.11)}
+.who-av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;
+  background:var(--mint);color:#07201b;font-size:10px;font-weight:700}
+.who-txt{text-align:left;line-height:1.2}
+.who-txt b{display:block;font-size:11.5px}
+.who-txt i{display:block;font-style:normal;font-size:9px;color:rgba(237,244,239,.55)}
+.who-car{font-size:9px;opacity:.6;padding-right:2px}
+.who-menu{position:absolute;top:calc(var(--shell-height) - 4px);right:14px;z-index:60;width:252px;
+  padding:6px;border-radius:12px;background:var(--surface);
+  box-shadow:0 20px 50px rgba(10,20,17,.3);border:1px solid rgba(23,34,31,.12)}
+.who-menu[hidden]{display:none}
+.who-menu p{margin:0;padding:8px 10px 6px;font-size:8.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted)}
+.who-menu button{display:flex;gap:9px;align-items:center;width:100%;padding:8px 10px;border:0;
+  border-radius:9px;background:transparent;font:inherit;font-size:12px;color:var(--ink);
+  text-align:left;cursor:pointer}
+.who-menu button:hover{background:var(--paper)}
+.who-menu button[aria-current="true"]{font-weight:700}
+.who-menu .mav{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;
+  background:var(--paper);color:var(--forest-2);font-size:9px;font-weight:700}
+@media(max-width:640px){ .who-txt{display:none} .gate-in{padding:40px 16px} }
+</style>
+</head>
+<body>
+<div class="gate" id="gate">
+  <div class="gate-in">
+    <div class="gate-head">
+      <span class="gate-mark">S</span>
+      <h1>SkillHorizon</h1>
+      <p>Skills intelligence for the whole firm. Choose the account you want to sign in with.</p>
+    </div>
+    <div class="gate-grid" id="gate-grid"></div>
+    <div class="gate-sso" id="gate-sso" hidden></div>
+    <p class="gate-foot" id="gate-foot">Single sign-on against your organisation&rsquo;s identity provider. SkillHorizon never holds a password.</p>
+  </div>
+</div>
+
+<div class="platform">
+<header class="platform-bar" id="platform-bar" hidden>
+<button type="button" class="who-chip" id="who-chip" aria-haspopup="true" aria-expanded="false">
+<span class="who-av" id="who-av"></span>
+<span class="who-txt"><b id="who-name"></b><i id="who-role"></i></span>
+<span class="who-car" aria-hidden="true">&#9662;</span>
+</button>
+<div class="who-menu" id="who-menu" hidden></div>
+</header>
+<main id="persona-host" class="persona-host">
+<div id="loading" class="loading" role="status" aria-live="polite">
+<div class="loading-card"><span class="spinner" aria-hidden="true"></span><span id="loading-text">Loading Employee experience…</span></div>
+</div>
+<p id="persona-status" class="sr-only" aria-live="polite"></p>
+</main>
+</div>
+<!-- Shell script and ENCODED_DOCUMENTS removed for split workflow. Re-merge with merge script. -->
+</body>
+</html>

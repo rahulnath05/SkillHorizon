@@ -16,7 +16,9 @@ Match the existing HTML. Do not invent a new visual system, and do not take the 
 
 Reference folder:
 
-`D:\Accelerators\LearningAndDevelopmentTool\skillhorizon-persona-htmls`
+`docs/reference/persona-htmls`
+
+That folder is the copy a cloud agent can read. The design source on this machine is `D:\Accelerators\LearningAndDevelopmentTool\skillhorizon-persona-htmls`.
 
 | Screen | Open this file |
 |--------|----------------|

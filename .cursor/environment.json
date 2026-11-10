@@ -2,7 +2,7 @@
   "build": {
     "dockerfile": "Dockerfile"
   },
-  "install": "dotnet restore SkillHorizon.slnx",
+  "install": "dotnet restore SkillHorizon.slnx\nif [ -f src/web/package-lock.json ]; then npm ci --prefix src/web; elif [ -f src/web/package.json ]; then npm install --prefix src/web; fi",
   "start": "sudo service docker start",
   "terminals": [
     {

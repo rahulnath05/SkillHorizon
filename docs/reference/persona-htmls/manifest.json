@@ -1,0 +1,42 @@
+{
+  "source": "C:/Users/HP/Downloads/Skill Horizon Updated.html",
+  "extractedAt": "2026-10-28T10:25:06.170Z",
+  "files": [
+    {
+      "id": "employee",
+      "file": "SkillHorizon-Employee.html",
+      "bytes": 359762
+    },
+    {
+      "id": "manager",
+      "file": "SkillHorizon-PeopleManager.html",
+      "bytes": 196280
+    },
+    {
+      "id": "comlead",
+      "file": "SkillHorizon-CompetencyLead.html",
+      "bytes": 260213
+    },
+    {
+      "id": "ld",
+      "file": "SkillHorizon-LearningDevelopment.html",
+      "bytes": 240079
+    },
+    {
+      "id": "engine",
+      "file": "SkillHorizon-AssessmentEngine.html",
+      "bytes": 145449
+    },
+    {
+      "id": "admin",
+      "file": "SkillHorizon-PlatformAdmin.html",
+      "bytes": 127820
+    },
+    {
+      "id": "shell",
+      "file": "SkillHorizon-Shell.html",
+      "bytes": 10028,
+      "note": "Outer gate + iframe host without embedded personas"
+    }
+  ]
+}

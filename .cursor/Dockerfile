@@ -40,6 +40,12 @@ RUN curl --retry 3 --retry-delay 5 -fsSL https://dot.net/v1/dotnet-install.sh -o
     && ln -sfn /usr/share/dotnet/dotnet /usr/local/bin/dotnet \
     && rm /tmp/dotnet-install.sh
 
+RUN curl --retry 3 --retry-delay 5 -fsSL https://nodejs.org/dist/v22.21.1/node-v22.21.1-linux-x64.tar.gz -o /tmp/node.tar.gz \
+    && tar -xzf /tmp/node.tar.gz -C /usr/local --strip-components=1 \
+    && rm /tmp/node.tar.gz \
+    && node --version \
+    && npm --version
+
 RUN id -u ubuntu >/dev/null 2>&1 || useradd -m -s /bin/bash ubuntu \
     && groupadd -f docker \
     && usermod -aG docker,sudo ubuntu \

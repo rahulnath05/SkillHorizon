@@ -4,15 +4,13 @@ The product interface is React in `src/web`, built with Vite. Do not add product
 
 Slice 00 left a temporary .NET shell in `src/hosts/SkillHorizon.Web/ShellHtml.cs`, `wwwroot/shell.css`, and the HTML results in `ShellEndpoints.cs`. The next UI slice deletes those screens and rebuilds them in React. See `docs/plans/00a-web.md`.
 
-The application must look like the HTML already designed here:
-
-`D:\Accelerators\LearningAndDevelopmentTool\skillhorizon-persona-htmls`
+The application must look like the HTML in `docs/reference/persona-htmls`.
 
 `SkillHorizon-Combined.html` is the full picture. `SkillHorizon-Shell.html` is the chrome. Each persona file is the screen for that workspace. Match layout, type, color, and spacing. Do not copy the prototype control that lets one login become every persona. Workspace entry follows `docs/plans/README.md` and ADR-011.
 
 ## Cursor Cloud specific instructions
 
-Cloud agents build `.cursor/Dockerfile` first. That image has the .NET 10 SDK and Docker. `dotnet restore SkillHorizon.slnx` is the install step. Keep service startup out of that script.
+Cloud agents build `.cursor/Dockerfile` first. That image has the .NET 10 SDK, Node.js 22, and Docker. `dotnet restore SkillHorizon.slnx` is the install step. When `src/web/package.json` exists, the same step installs its npm dependencies. Keep service startup out of that script.
 
 Docker must be running before the app starts. `docker compose up --build` starts Postgres, Redis, the control registry, the API, the worker, and the web shell. The first boot migrates both databases and seeds zone `local` with legal entity `LE-LOCAL`.
 
