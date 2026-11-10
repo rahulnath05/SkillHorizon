@@ -53,5 +53,49 @@ public sealed class CoreApiClient
         return WorkspaceLookup.Ok(body?.Workspaces ?? []);
     }
 
+    public async Task<TeamLookup> GetTeamAsync(string bearer, string correlationId, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "workforce/team");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
+        request.Headers.TryAddWithoutValidation(SkillHorizonContext.WorkspaceHeader, "people_manager");
+        if (!string.IsNullOrWhiteSpace(correlationId))
+            request.Headers.TryAddWithoutValidation(SkillHorizonContext.CorrelationHeader, correlationId);
+
+        using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if (response.StatusCode == HttpStatusCode.Forbidden)
+            return TeamLookup.Refused();
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+            return TeamLookup.Unauthenticated();
+        if ((int)response.StatusCode >= 500)
+            return TeamLookup.Unavailable();
+
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadFromJsonAsync<TeamBody>(cancellationToken).ConfigureAwait(false);
+        return TeamLookup.Ok(body?.People ?? []);
+    }
+
     private sealed record WorkspaceBody(IReadOnlyList<string> Workspaces);
+
+    private sealed record TeamBody(IReadOnlyList<TeamPerson> People);
+}
+
+public enum TeamLookupStatus
+{
+    Ok,
+    Refused,
+    Unavailable,
+    Unauthenticated
+}
+
+public sealed record TeamPerson(string EmployeeId, string DisplayName, string LegalEntityId, string CountryCode);
+
+public sealed record TeamLookup(TeamLookupStatus Status, IReadOnlyList<TeamPerson> People)
+{
+    public static TeamLookup Ok(IReadOnlyList<TeamPerson> people) => new(TeamLookupStatus.Ok, people);
+
+    public static TeamLookup Refused() => new(TeamLookupStatus.Refused, []);
+
+    public static TeamLookup Unavailable() => new(TeamLookupStatus.Unavailable, []);
+
+    public static TeamLookup Unauthenticated() => new(TeamLookupStatus.Unauthenticated, []);
 }

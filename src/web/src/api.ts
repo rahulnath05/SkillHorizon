@@ -62,6 +62,23 @@ export async function chooseWorkspace(workspace: string): Promise<ShellState> {
   throw new Error(await readError(response));
 }
 
+export type DirectReport = {
+  employeeId: string;
+  displayName: string;
+  legalEntityId: string;
+  countryCode: string;
+};
+
+export async function getTeam(): Promise<DirectReport[]> {
+  const response = await fetch("/api/team", {
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error(await readError(response));
+  const body = (await response.json()) as { people?: DirectReport[] };
+  return body.people ?? [];
+}
+
 export async function signOut(): Promise<void> {
   const response = await postJson("/api/signout", {});
   if (response.status !== 204) throw new Error(await readError(response));

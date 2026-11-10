@@ -15,6 +15,7 @@ builder.Services.AddSkillHorizonSecrets();
 builder.Services.AddSingleton(_ => NpgsqlDataSource.Create(options.DomainConnectionString));
 builder.Services.AddSkillHorizonModules();
 builder.Services.AddSkillHorizonMessaging(options);
+builder.Services.AddHostedService<WorkforceSyncWorker>();
 builder.Services.AddHostedService<OutboxPublishWorker>();
 builder.Services.AddHealthChecks()
     .AddNpgSql(options.DomainConnectionString, name: "domain-postgres")

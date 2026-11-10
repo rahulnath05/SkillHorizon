@@ -20,6 +20,7 @@ public static class ShellEndpoints
         app.MapPost("/api/signin", (Delegate)SignIn);
         app.MapPost("/api/signout", (Delegate)SignOut);
         app.MapPost("/api/workspace", (Delegate)Choose);
+        app.MapGet("/api/team", (Delegate)Team);
         app.MapGet("/signin/oidc", (Delegate)Oidc);
         app.MapFallback(ServeClient);
         return app;
@@ -135,6 +136,35 @@ public static class ShellEndpoints
 
         await RememberWorkspace(http, workspace).ConfigureAwait(false);
         return Results.NoContent();
+    }
+
+    private static async Task<IResult> Team(HttpContext http)
+    {
+        http.Response.Headers.CacheControl = "no-store";
+        if (http.User.Identity?.IsAuthenticated != true)
+            return Results.Unauthorized();
+
+        var active = http.User.FindFirst("active_workspace")?.Value;
+        if (!string.Equals(active, "people_manager", StringComparison.Ordinal))
+            return Results.Json(new { error = "Direct reports are read from the people manager workspace." }, statusCode: StatusCodes.Status403Forbidden);
+
+        var assertion = Assertion(http.User);
+        if (assertion is null)
+            return Results.Unauthorized();
+
+        var bearer = await Bearer(http, assertion).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(bearer))
+            return Results.Unauthorized();
+
+        var api = http.RequestServices.GetRequiredService<CoreApiClient>();
+        var team = await api.GetTeamAsync(bearer, Correlation(http) ?? "", http.RequestAborted).ConfigureAwait(false);
+        return team.Status switch
+        {
+            TeamLookupStatus.Ok => Results.Ok(new { people = team.People }),
+            TeamLookupStatus.Unauthenticated => Results.Unauthorized(),
+            TeamLookupStatus.Unavailable => Results.Json(new { error = "The team list could not be loaded." }, statusCode: StatusCodes.Status503ServiceUnavailable),
+            _ => Results.Json(new { error = "Direct reports are read from the people manager workspace." }, statusCode: StatusCodes.Status403Forbidden)
+        };
     }
 
     private static async Task<ShellState> Describe(HttpContext http)
