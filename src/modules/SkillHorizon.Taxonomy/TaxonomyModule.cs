@@ -6,5 +6,11 @@ public static class TaxonomyModule
 {
     public const string Schema = "taxonomy";
 
-    public static IServiceCollection AddTaxonomyModule(this IServiceCollection services) => services;
+    public const string PublishedMessage = "taxonomy.published";
+
+    public static IServiceCollection AddTaxonomyModule(this IServiceCollection services)
+    {
+        services.AddSingleton<ITaxonomyAuthoring, PostgresTaxonomyAuthoring>();
+        return services;
+    }
 }

@@ -6,5 +6,12 @@ public static class BenchmarkModule
 {
     public const string Schema = "benchmark";
 
-    public static IServiceCollection AddBenchmarkModule(this IServiceCollection services) => services;
+    public const string PublishedMessage = "benchmark.published";
+
+    public static IServiceCollection AddBenchmarkModule(this IServiceCollection services)
+    {
+        services.AddSingleton<IBenchmarkAuthoring, PostgresBenchmarkAuthoring>();
+        services.AddSingleton<IReferenceLibrary, PostgresReferenceLibrary>();
+        return services;
+    }
 }

@@ -30,6 +30,10 @@ public sealed class SkillHorizonOptions
 
     public bool SyncWorkforceOnStartup { get; set; } = true;
 
+    public bool LoadStandardsFixture { get; set; } = true;
+
+    public bool ReplicateReference { get; set; } = true;
+
     public OidcOptions Oidc { get; set; } = new();
 }
 

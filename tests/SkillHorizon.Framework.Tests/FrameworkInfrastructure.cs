@@ -177,6 +177,8 @@ public sealed class FrameworkInfrastructure : IAsyncLifetime
         Environment.SetEnvironmentVariable("SkillHorizon__MigrateOnStartup", "true");
         Environment.SetEnvironmentVariable("SkillHorizon__PublishOutbox", "false");
         Environment.SetEnvironmentVariable("SkillHorizon__SyncWorkforceOnStartup", "false");
+        Environment.SetEnvironmentVariable("SkillHorizon__LoadStandardsFixture", "false");
+        Environment.SetEnvironmentVariable("SkillHorizon__ReplicateReference", "false");
         Environment.SetEnvironmentVariable("SkillHorizon__SigningKeySecretName", "local-signing-key");
         Environment.SetEnvironmentVariable("SkillHorizon__RegistryKeySecretName", "registry-key");
         Environment.SetEnvironmentVariable("SkillHorizon__DevIdentities", DevIdentities);
@@ -228,6 +230,8 @@ public sealed class ApiFactory : WebApplicationFactory<ApiHost::Program>
         ["SkillHorizon:MigrateOnStartup"] = "true",
         ["SkillHorizon:PublishOutbox"] = "false",
         ["SkillHorizon:SyncWorkforceOnStartup"] = "false",
+        ["SkillHorizon:LoadStandardsFixture"] = "false",
+        ["SkillHorizon:ReplicateReference"] = "false",
         ["SkillHorizon:SigningKeySecretName"] = "local-signing-key",
         ["SkillHorizon:RegistryKeySecretName"] = "registry-key",
         ["SkillHorizon:Secrets:local-signing-key"] = FrameworkInfrastructure.SigningKey,

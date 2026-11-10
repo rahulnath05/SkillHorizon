@@ -325,6 +325,57 @@ button { cursor: pointer; }
   outline-offset: 2px;
 }
 
+.standards h2, .draft h2, .history h2 {
+  margin: 28px 0 8px;
+  font-family: "Manrope", system-ui, sans-serif;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.draft select {
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid rgba(23, 34, 31, 0.16);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.draft-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.draft-save, .draft-publish {
+  min-height: 40px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.draft-save {
+  border: 1px solid rgba(23, 34, 31, 0.16);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.draft-publish {
+  border: 0;
+  background: var(--forest);
+  color: #f4f7f4;
+}
+
+.draft-save:disabled, .draft-publish:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
 .sr {
   position: absolute;
   width: 1px;

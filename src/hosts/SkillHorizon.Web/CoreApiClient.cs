@@ -74,6 +74,28 @@ public sealed class CoreApiClient
         return TeamLookup.Ok(body?.People ?? []);
     }
 
+    public async Task<ApiReply> SendAsync(
+        HttpMethod method,
+        string path,
+        string workspace,
+        string bearer,
+        string correlationId,
+        string? json,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(method, path);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
+        request.Headers.TryAddWithoutValidation(SkillHorizonContext.WorkspaceHeader, workspace);
+        if (!string.IsNullOrWhiteSpace(correlationId))
+            request.Headers.TryAddWithoutValidation(SkillHorizonContext.CorrelationHeader, correlationId);
+        if (json is not null)
+            request.Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+
+        using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        return new ApiReply((int)response.StatusCode, body);
+    }
+
     private sealed record WorkspaceBody(IReadOnlyList<string> Workspaces);
 
     private sealed record TeamBody(IReadOnlyList<TeamPerson> People);
@@ -88,6 +110,8 @@ public enum TeamLookupStatus
 }
 
 public sealed record TeamPerson(string EmployeeId, string DisplayName, string LegalEntityId, string CountryCode);
+
+public sealed record ApiReply(int Status, string Body);
 
 public sealed record TeamLookup(TeamLookupStatus Status, IReadOnlyList<TeamPerson> People)
 {
