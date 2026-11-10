@@ -111,7 +111,7 @@ services:
       <<: *runtime
       SkillHorizon__ZoneId: local
       SkillHorizon__ApiUrl: http://api:8080
-      SkillHorizon__DevIdentities: person-multi|LE-LOCAL|person-multi;person-single|LE-LOCAL|person-single;person-unmapped|LE-OTHER|person-unmapped;person-nogrant|LE-LOCAL|person-nogrant
+      SkillHorizon__DevIdentities: person-multi|LE-LOCAL|person-multi;person-single|LE-LOCAL|person-single;person-unmapped|LE-OTHER|person-unmapped;person-nogrant|LE-LOCAL|person-nogrant;person-ld|LE-LOCAL|person-ld
     depends_on:
       api:
         condition: service_healthy

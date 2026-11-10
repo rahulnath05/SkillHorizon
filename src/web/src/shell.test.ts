@@ -34,6 +34,7 @@ describe("resolveDestination", () => {
 
   it("opens the only workspace directly", () => {
     expect(resolveDestination(shell({ subjectId: "person-single", workspaces: ["employee"], activeWorkspace: "employee" }))).toBe("/workspace");
+    expect(resolveDestination(shell({ subjectId: "person-ld", workspaces: ["learning_and_development"], activeWorkspace: "learning_and_development" }))).toBe("/workspace");
     expect(resolveDestination(shell({ workspaces: ["employee"], activeWorkspace: null }))).toBe("/workspace");
   });
 

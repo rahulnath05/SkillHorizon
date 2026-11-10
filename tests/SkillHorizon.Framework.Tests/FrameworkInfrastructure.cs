@@ -20,7 +20,7 @@ public sealed class FrameworkInfrastructure : IAsyncLifetime
     public const string SigningKey = "local-signing-key-must-be-at-least-32b";
     public const string RegistryKey = "local-registry-key";
     public const string DevIdentities =
-        "person-multi|LE-LOCAL|person-multi;person-single|LE-LOCAL|person-single;person-unmapped|LE-OTHER|person-unmapped;person-nogrant|LE-LOCAL|person-nogrant";
+        "person-multi|LE-LOCAL|person-multi;person-single|LE-LOCAL|person-single;person-unmapped|LE-OTHER|person-unmapped;person-nogrant|LE-LOCAL|person-nogrant;person-ld|LE-LOCAL|person-ld";
 
     private Testcontainers.PostgreSql.PostgreSqlContainer? _postgres;
     private Testcontainers.Redis.RedisContainer? _redis;
@@ -157,7 +157,8 @@ public sealed class FrameworkInfrastructure : IAsyncLifetime
             VALUES
                 ('11111111-1111-1111-1111-111111111111', 'person-multi', 'employee', now()),
                 ('22222222-2222-2222-2222-222222222222', 'person-multi', 'people_manager', now()),
-                ('33333333-3333-3333-3333-333333333333', 'person-single', 'employee', now())
+                ('33333333-3333-3333-3333-333333333333', 'person-single', 'employee', now()),
+                ('44444444-4444-4444-4444-444444444444', 'person-ld', 'learning_and_development', now())
             ON CONFLICT (subject_id, workspace) DO NOTHING;
             """,
             domain);
@@ -175,6 +176,7 @@ public sealed class FrameworkInfrastructure : IAsyncLifetime
         Environment.SetEnvironmentVariable("SkillHorizon__EnableConsoleExporter", "false");
         Environment.SetEnvironmentVariable("SkillHorizon__MigrateOnStartup", "true");
         Environment.SetEnvironmentVariable("SkillHorizon__PublishOutbox", "false");
+        Environment.SetEnvironmentVariable("SkillHorizon__SyncWorkforceOnStartup", "false");
         Environment.SetEnvironmentVariable("SkillHorizon__SigningKeySecretName", "local-signing-key");
         Environment.SetEnvironmentVariable("SkillHorizon__RegistryKeySecretName", "registry-key");
         Environment.SetEnvironmentVariable("SkillHorizon__DevIdentities", DevIdentities);
@@ -225,6 +227,7 @@ public sealed class ApiFactory : WebApplicationFactory<ApiHost::Program>
         ["SkillHorizon:EnableConsoleExporter"] = "false",
         ["SkillHorizon:MigrateOnStartup"] = "true",
         ["SkillHorizon:PublishOutbox"] = "false",
+        ["SkillHorizon:SyncWorkforceOnStartup"] = "false",
         ["SkillHorizon:SigningKeySecretName"] = "local-signing-key",
         ["SkillHorizon:RegistryKeySecretName"] = "registry-key",
         ["SkillHorizon:Secrets:local-signing-key"] = FrameworkInfrastructure.SigningKey,
