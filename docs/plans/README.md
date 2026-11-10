@@ -4,9 +4,9 @@ Working checklists for the build. The short order is [the sequencing note](../ar
 
 ## Current
 
-Next slice: [00a Web](00a-web.md).
+Next slice: [01 Workforce](01-workforce.md).
 
-The framework hosts are done. The product UI is not. Slice 00a replaces the temporary .NET screens with React, matching the HTML in `D:\Accelerators\LearningAndDevelopmentTool\skillhorizon-persona-htmls`. Read that plan before writing any interface.
+Slice 00a replaced the temporary .NET screens with the React application in `src/web`. Persona screens wait for their own slices.
 
 ## Status rule
 
@@ -25,7 +25,7 @@ At the start of a build session, read `Current` and open that child. Do the firs
 | Slice | Plan | Status |
 |-------|------|--------|
 | 00 Framework | [00-framework.md](00-framework.md) | done |
-| 00a Web | [00a-web.md](00a-web.md) | not-started |
+| 00a Web | [00a-web.md](00a-web.md) | done |
 | 01 Workforce | [01-workforce.md](01-workforce.md) | not-started |
 | 02 Benchmarks | [02-benchmarks.md](02-benchmarks.md) | not-started |
 | 03 Learning | [03-learning.md](03-learning.md) | not-started |

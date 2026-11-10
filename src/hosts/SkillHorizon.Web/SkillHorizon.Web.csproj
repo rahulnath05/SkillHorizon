@@ -4,7 +4,12 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <WebClientDir>$(MSBuildProjectDirectory)/../../web</WebClientDir>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Content Remove="wwwroot/**" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\building-blocks\SkillHorizon.Hosting\SkillHorizon.Hosting.csproj" />
@@ -13,5 +18,24 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.14" />
   </ItemGroup>
+
+  <Target Name="RestoreWebClient" Condition="'$(SkipWebClientBuild)' != 'true' AND '$(DesignTimeBuild)' != 'true' AND !Exists('$(WebClientDir)/node_modules/react/package.json')">
+    <Exec Command="npm ci" WorkingDirectory="$(WebClientDir)" />
+  </Target>
+
+  <Target Name="BuildWebClient" BeforeTargets="BeforeBuild" DependsOnTargets="RestoreWebClient" Condition="'$(SkipWebClientBuild)' != 'true' AND '$(DesignTimeBuild)' != 'true'">
+    <Exec Command="npm run build" WorkingDirectory="$(WebClientDir)" />
+  </Target>
+
+  <Target Name="PublishWebClient" AfterTargets="ComputeFilesToPublish" DependsOnTargets="BuildWebClient">
+    <ItemGroup>
+      <DistFiles Include="$(MSBuildProjectDirectory)/wwwroot/**" />
+      <ResolvedFileToPublish Include="@(DistFiles->'%(FullPath)')" Exclude="@(ResolvedFileToPublish)">
+        <RelativePath>wwwroot/%(DistFiles.RecursiveDir)%(DistFiles.Filename)%(DistFiles.Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
 
 </Project>
