@@ -7,7 +7,7 @@ using SkillHorizon.Hosting;
 
 namespace SkillHorizon.Learning;
 
-public sealed record SittingItem(Guid ItemId, string SkillCode, string Prompt, IReadOnlyList<SittingChoice> Choices);
+public sealed record SittingItem(Guid ItemId, string SkillCode, string Prompt, IReadOnlyList<SittingChoice> Choices, bool FreeText);
 
 public sealed record SittingChoice(int Rank, string Label);
 
@@ -58,7 +58,7 @@ public sealed class AssessmentSession
         return await Next(sittingId, grant.Skills.Select(skill => skill.SkillCode).ToArray(), cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<OpenSitting> AnswerAsync(Guid sittingId, string token, Guid itemId, int rank, CancellationToken cancellationToken)
+    public async Task<OpenSitting> AnswerAsync(Guid sittingId, string token, Guid itemId, int rank, string? responseBody, CancellationToken cancellationToken)
     {
         var grant = await Grant(token, cancellationToken).ConfigureAwait(false);
         await RequireOpen(sittingId, grant, cancellationToken).ConfigureAwait(false);
@@ -67,6 +67,30 @@ public sealed class AssessmentSession
         var skillCode = await SkillForItem(connection, transaction, itemId, cancellationToken).ConfigureAwait(false);
         if (!grant.Skills.Any(skill => skill.SkillCode == skillCode))
             throw new InvalidOperationException("That item is not on this sitting.");
+
+        var rubric = await RubricForItem(connection, transaction, itemId, cancellationToken).ConfigureAwait(false);
+        var storedRank = rank;
+        if (rubric is not null)
+        {
+            var typed = responseBody?.Trim() ?? "";
+            if (typed.Length == 0)
+                throw new InvalidOperationException("A typed answer is required.");
+            storedRank = MarkBand(rubric, typed);
+            await using var mark = new NpgsqlCommand(
+                """
+                INSERT INTO assessment.mark (sitting_id, item_id, response_body, band, marked_at)
+                VALUES ($1, $2, $3, $4, now())
+                ON CONFLICT (sitting_id, item_id) DO UPDATE
+                    SET response_body = EXCLUDED.response_body, band = EXCLUDED.band, marked_at = now()
+                """,
+                connection,
+                transaction);
+            mark.Parameters.AddWithValue(sittingId);
+            mark.Parameters.AddWithValue(itemId);
+            mark.Parameters.AddWithValue(typed);
+            mark.Parameters.AddWithValue(storedRank);
+            await mark.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
 
         await using var insert = new NpgsqlCommand(
             """
@@ -79,7 +103,7 @@ public sealed class AssessmentSession
         insert.Parameters.AddWithValue(sittingId);
         insert.Parameters.AddWithValue(itemId);
         insert.Parameters.AddWithValue(skillCode);
-        insert.Parameters.AddWithValue(rank);
+        insert.Parameters.AddWithValue(storedRank);
         var updated = await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         if (updated == 0)
             throw new InvalidOperationException("That sitting is not open.");
@@ -227,41 +251,121 @@ public sealed class AssessmentSession
     private async Task<OpenSitting> Next(Guid sittingId, IReadOnlyList<string> skillCodes, CancellationToken cancellationToken)
     {
         await using var connection = await _assessment.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-        await using var command = new NpgsqlCommand(
+        var remaining = new List<Candidate>();
+        await using (var command = new NpgsqlCommand(
             """
-            SELECT item.item_id, item.skill_code, item.prompt
+            SELECT item.item_id, item.skill_code, item.prompt, item.difficulty,
+                   EXISTS (SELECT 1 FROM assessment.rubric AS rubric WHERE rubric.item_id = item.item_id)
             FROM assessment.item AS item
             WHERE item.skill_code = ANY ($2)
               AND NOT EXISTS (
                   SELECT 1 FROM assessment.response AS response
                   WHERE response.sitting_id = $1 AND response.item_id = item.item_id)
-            ORDER BY item.skill_code
-            LIMIT 1
+            ORDER BY item.difficulty, item.skill_code, item.item_id
             """,
-            connection);
-        command.Parameters.AddWithValue(sittingId);
-        command.Parameters.Add(new NpgsqlParameter { Value = skillCodes.ToArray(), NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Text });
-        Guid itemId;
-        string skillCode;
-        string prompt;
-        await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+            connection))
         {
-            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-                return new OpenSitting(sittingId, null, true);
-            itemId = reader.GetGuid(0);
-            skillCode = reader.GetString(1);
-            prompt = reader.GetString(2);
+            command.Parameters.AddWithValue(sittingId);
+            command.Parameters.Add(new NpgsqlParameter { Value = skillCodes.ToArray(), NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Text });
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                remaining.Add(new Candidate(
+                    reader.GetGuid(0),
+                    reader.GetString(1),
+                    reader.GetString(2),
+                    reader.GetInt32(3),
+                    reader.GetBoolean(4)));
+            }
         }
 
+        if (remaining.Count == 0)
+            return new OpenSitting(sittingId, null, true);
+
+        int? previousDifficulty = null;
+        int? previousScore = null;
+        await using (var previous = new NpgsqlCommand(
+            """
+            SELECT item.difficulty, response.selected_rank
+            FROM assessment.response AS response
+            JOIN assessment.item AS item ON item.item_id = response.item_id
+            WHERE response.sitting_id = $1
+            ORDER BY response.responded_at DESC
+            LIMIT 1
+            """,
+            connection))
+        {
+            previous.Parameters.AddWithValue(sittingId);
+            await using var reader = await previous.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                previousDifficulty = reader.GetInt32(0);
+                previousScore = reader.GetInt32(1);
+            }
+        }
+
+        var chosen = Choose(remaining, previousDifficulty, previousScore);
         var choices = new List<SittingChoice>();
-        await using var choiceCommand = new NpgsqlCommand(
-            "SELECT rank, label FROM assessment.choice WHERE item_id = $1 ORDER BY rank",
-            connection);
-        choiceCommand.Parameters.AddWithValue(itemId);
-        await using var choiceReader = await choiceCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        while (await choiceReader.ReadAsync(cancellationToken).ConfigureAwait(false))
-            choices.Add(new SittingChoice(choiceReader.GetInt32(0), choiceReader.GetString(1)));
-        return new OpenSitting(sittingId, new SittingItem(itemId, skillCode, prompt, choices), false);
+        if (!chosen.FreeText)
+        {
+            await using var choiceCommand = new NpgsqlCommand(
+                "SELECT rank, label FROM assessment.choice WHERE item_id = $1 ORDER BY rank",
+                connection);
+            choiceCommand.Parameters.AddWithValue(chosen.ItemId);
+            await using var choiceReader = await choiceCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await choiceReader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                choices.Add(new SittingChoice(choiceReader.GetInt32(0), choiceReader.GetString(1)));
+        }
+
+        return new OpenSitting(sittingId, new SittingItem(chosen.ItemId, chosen.SkillCode, chosen.Prompt, choices, chosen.FreeText), false);
+    }
+
+    private static Candidate Choose(IReadOnlyList<Candidate> remaining, int? previousDifficulty, int? previousScore)
+    {
+        if (previousDifficulty is null || previousScore is null)
+            return remaining[remaining.Count / 2];
+        if (previousScore > previousDifficulty)
+        {
+            foreach (var item in remaining)
+            {
+                if (item.Difficulty > previousDifficulty)
+                    return item;
+            }
+
+            return remaining[^1];
+        }
+
+        for (var index = remaining.Count - 1; index >= 0; index--)
+        {
+            if (remaining[index].Difficulty < previousDifficulty)
+                return remaining[index];
+        }
+
+        return remaining[0];
+    }
+
+    private static int MarkBand(string rubric, string response)
+    {
+        var best = 1;
+        foreach (var line in rubric.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var parts = line.Split('|');
+            if (parts.Length < 3 || !int.TryParse(parts[0].Trim(), out var band) || band is < 1 or > 5)
+                continue;
+            var cue = parts[1].Trim();
+            if (cue.Length > 0 && response.Contains(cue, StringComparison.OrdinalIgnoreCase) && band > best)
+                best = band;
+        }
+
+        return best;
+    }
+
+    private static async Task<string?> RubricForItem(NpgsqlConnection connection, NpgsqlTransaction transaction, Guid itemId, CancellationToken cancellationToken)
+    {
+        await using var command = new NpgsqlCommand("SELECT body FROM assessment.rubric WHERE item_id = $1", connection, transaction);
+        command.Parameters.AddWithValue(itemId);
+        var found = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        return found as string;
     }
 
     private static async Task<string> SkillForItem(NpgsqlConnection connection, NpgsqlTransaction transaction, Guid itemId, CancellationToken cancellationToken)
@@ -336,6 +440,8 @@ public sealed class AssessmentSession
 
     private static string TokenHash(string token) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
+
+    private sealed record Candidate(Guid ItemId, string SkillCode, string Prompt, int Difficulty, bool FreeText);
 
     private sealed record OwnedSitting(Guid AuthorizationId, string SubjectId, Guid BenchmarkVersionId);
 

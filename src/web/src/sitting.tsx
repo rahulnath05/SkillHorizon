@@ -6,6 +6,7 @@ import {
   startSitting,
   type AssessmentSummary,
   type OpenSitting,
+  type SittingItem,
   type SkillGap,
 } from "./api";
 import { useTitle } from "./ui";
@@ -15,6 +16,7 @@ export function Sitting() {
   const [summary, setSummary] = useState<AssessmentSummary | null>(null);
   const [open, setOpen] = useState<OpenSitting | null>(null);
   const [rank, setRank] = useState<number | null>(null);
+  const [responseBody, setResponseBody] = useState("");
   const [gap, setGap] = useState<SkillGap[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -60,6 +62,7 @@ export function Sitting() {
               .then((next) => {
                 setOpen(next);
                 setRank(null);
+                setResponseBody("");
                 setProblem(null);
               })
               .catch((error: unknown) => {
@@ -72,20 +75,28 @@ export function Sitting() {
         </button>
       ) : null}
       {!shownGap && open?.item ? (
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (rank === null) return;
+        <ItemForm
+          item={open.item}
+          rank={rank}
+          responseBody={responseBody}
+          pending={pending}
+          onRank={setRank}
+          onResponse={setResponseBody}
+          onSubmit={() => {
+            const freeText = open.item?.freeText || (open.item?.choices.length ?? 0) === 0;
+            if (freeText ? responseBody.trim().length === 0 : rank === null) return;
             setPending(true);
             void answerSitting({
               token: open.token,
               sittingId: open.sittingId,
               itemId: open.item!.itemId,
-              rank,
+              rank: rank ?? 0,
+              responseBody: freeText ? responseBody.trim() : undefined,
             })
               .then((next) => {
                 setOpen(next);
                 setRank(null);
+                setResponseBody("");
                 setProblem(null);
               })
               .catch((error: unknown) => {
@@ -93,24 +104,7 @@ export function Sitting() {
               })
               .finally(() => setPending(false));
           }}
-        >
-          <p className="sitting-prompt">{open.item.prompt}</p>
-          <fieldset className="sitting-choices">
-            <legend className="sr">Choose a response</legend>
-            {open.item.choices.map((choice) => (
-              <label key={choice.rank}>
-                <input
-                  type="radio"
-                  name="response"
-                  checked={rank === choice.rank}
-                  onChange={() => setRank(choice.rank)}
-                />
-                <span>{choice.label}</span>
-              </label>
-            ))}
-          </fieldset>
-          <button type="submit" className="draft-publish" disabled={pending || rank === null}>Save response</button>
-        </form>
+        />
       ) : null}
       {!shownGap && open?.readyToSeal ? (
         <button
@@ -135,6 +129,58 @@ export function Sitting() {
         </button>
       ) : null}
     </section>
+  );
+}
+
+function ItemForm({
+  item,
+  rank,
+  responseBody,
+  pending,
+  onRank,
+  onResponse,
+  onSubmit,
+}: {
+  item: SittingItem;
+  rank: number | null;
+  responseBody: string;
+  pending: boolean;
+  onRank: (rank: number) => void;
+  onResponse: (value: string) => void;
+  onSubmit: () => void;
+}) {
+  const freeText = item.freeText || item.choices.length === 0;
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit();
+      }}
+    >
+      <p className="sitting-prompt">{item.prompt}</p>
+      {freeText ? (
+        <label className="task-close">
+          Your answer
+          <textarea value={responseBody} onChange={(event) => onResponse(event.target.value)} required />
+        </label>
+      ) : (
+        <fieldset className="sitting-choices">
+          <legend className="sr">Choose a response</legend>
+          {item.choices.map((choice) => (
+            <label key={choice.rank}>
+              <input
+                type="radio"
+                name="response"
+                checked={rank === choice.rank}
+                onChange={() => onRank(choice.rank)}
+              />
+              <span>{choice.label}</span>
+            </label>
+          ))}
+        </fieldset>
+      )}
+      <button type="submit" className="draft-publish" disabled={pending || (freeText ? responseBody.trim().length === 0 : rank === null)}>Save response</button>
+    </form>
   );
 }
 

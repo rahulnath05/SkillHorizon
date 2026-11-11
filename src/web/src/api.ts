@@ -175,6 +175,7 @@ export type SittingItem = {
   skillCode: string;
   prompt: string;
   choices: SittingChoice[];
+  freeText?: boolean;
 };
 
 export type OpenSitting = {
@@ -273,11 +274,66 @@ export async function answerSitting(body: {
   sittingId: string;
   itemId: string;
   rank: number;
+  responseBody?: string;
 }): Promise<OpenSitting> {
   const response = await postJson("/api/sittings/answer", body);
   if (!response.ok) throw new Error(await readError(response));
   const next = (await response.json()) as Omit<OpenSitting, "token">;
   return { token: body.token, sittingId: body.sittingId, item: next.item ?? null, readyToSeal: next.readyToSeal };
+}
+
+export type BankItem = {
+  itemId: string;
+  skillCode: string;
+  difficulty: number;
+  prompt: string;
+  rubric: string | null;
+};
+
+export type BankMark = {
+  itemId: string;
+  skillCode: string;
+  band: number;
+  responseBody: string;
+  markedAt: string;
+};
+
+export type PanelExpert = {
+  smeId: string;
+  domainName: string;
+  expertName: string;
+  credentials: string;
+};
+
+export async function getItemBank(): Promise<BankItem[]> {
+  const body = await readJson<{ items?: BankItem[] }>("/api/studio/bank");
+  return body.items ?? [];
+}
+
+export async function writeItem(body: {
+  skillCode: string;
+  prompt: string;
+  difficulty: number;
+  rubric?: string;
+  choices?: { rank: number; label: string }[];
+}): Promise<void> {
+  const response = await postJson("/api/studio/items", body);
+  if (!response.ok) throw new Error(await readError(response));
+}
+
+export async function getMarks(): Promise<BankMark[]> {
+  const body = await readJson<{ marks?: BankMark[] }>("/api/studio/marks");
+  return body.marks ?? [];
+}
+
+export async function getPanel(): Promise<PanelExpert[]> {
+  const body = await readJson<{ panel?: PanelExpert[] }>("/api/studio/panel");
+  return body.panel ?? [];
+}
+
+export async function nameExpert(body: { domainName: string; expertName: string; credentials: string }): Promise<void> {
+  const response = await postJson("/api/studio/panel", body);
+  if (!response.ok) throw new Error(await readError(response));
 }
 
 export async function sealSitting(body: { token: string; sittingId: string }): Promise<SkillGap[]> {
