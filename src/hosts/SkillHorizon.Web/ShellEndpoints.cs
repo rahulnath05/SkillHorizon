@@ -23,6 +23,10 @@ public static class ShellEndpoints
         app.MapGet("/api/team", (Delegate)Team);
         app.MapGet("/api/standards", (Delegate)Standards);
         app.MapGet("/api/assessment", (Delegate)Assessment);
+        app.MapGet("/api/home", (Delegate)Home);
+        app.MapGet("/api/skills", (Delegate)Skills);
+        app.MapGet("/api/documents", (Delegate)Documents);
+        app.MapGet("/api/documents/{evidenceId:guid}", (Delegate)DocumentFile);
         app.MapPost("/api/sittings/start", (Delegate)StartSitting);
         app.MapPost("/api/sittings/answer", (Delegate)AnswerSitting);
         app.MapPost("/api/sittings/seal", (Delegate)SealSitting);
@@ -258,6 +262,115 @@ public static class ShellEndpoints
         if (refused is not null)
             return refused;
         return await ForwardSitting(http, "seal").ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> Home(HttpContext http)
+    {
+        var refused = await EmployeeContext(http).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        var other = OtherPerson(http);
+        if (other is not null)
+            return other;
+
+        var skills = await Core(http, HttpMethod.Get, "employee/skills", null).ConfigureAwait(false);
+        if (skills.Status != StatusCodes.Status200OK)
+            return Results.Text(skills.Body, "application/json", statusCode: skills.Status);
+        var session = await Session(http).ConfigureAwait(false);
+        var learning = http.RequestServices.GetRequiredService<LearningApiClient>();
+        var activity = await learning.SendAsync(
+            HttpMethod.Get,
+            "employee/activity",
+            null,
+            session!.Value.Bearer,
+            "employee",
+            Correlation(http),
+            null,
+            http.RequestAborted).ConfigureAwait(false);
+        if (activity.Status != StatusCodes.Status200OK)
+            return Results.Text(activity.Body, "application/json", statusCode: activity.Status);
+
+        using var skillDocument = JsonDocument.Parse(skills.Body);
+        using var activityDocument = JsonDocument.Parse(activity.Body);
+        var atTarget = 0;
+        var belowTarget = 0;
+        foreach (var skill in skillDocument.RootElement.GetProperty("skills").EnumerateArray())
+        {
+            if (skill.GetProperty("currentRank").GetInt32() >= skill.GetProperty("targetRank").GetInt32())
+                atTarget++;
+            else
+                belowTarget++;
+        }
+
+        return Results.Ok(new
+        {
+            atTarget,
+            belowTarget,
+            openSteps = activityDocument.RootElement.GetProperty("openSteps").GetInt32(),
+            sittingOpen = activityDocument.RootElement.GetProperty("sittingOpen").GetBoolean()
+        });
+    }
+
+    private static async Task<IResult> Skills(HttpContext http)
+    {
+        var refused = await EmployeeContext(http).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        var other = OtherPerson(http);
+        if (other is not null)
+            return other;
+        return await EmployeeProxy(http, HttpMethod.Get, "employee/skills", null).ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> Documents(HttpContext http)
+    {
+        var refused = await EmployeeContext(http).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        var other = OtherPerson(http);
+        if (other is not null)
+            return other;
+        var session = await Session(http).ConfigureAwait(false);
+        return await LearningUser(http, HttpMethod.Get, "documents", session!.Value.Bearer, "employee", null).ConfigureAwait(false);
+    }
+
+    private static async Task DocumentFile(HttpContext http, Guid evidenceId)
+    {
+        var refused = await EmployeeContext(http).ConfigureAwait(false);
+        if (refused is not null)
+        {
+            await refused.ExecuteAsync(http).ConfigureAwait(false);
+            return;
+        }
+
+        var other = OtherPerson(http);
+        if (other is not null)
+        {
+            await other.ExecuteAsync(http).ConfigureAwait(false);
+            return;
+        }
+
+        var session = await Session(http).ConfigureAwait(false);
+        var learning = http.RequestServices.GetRequiredService<LearningApiClient>();
+        await learning.CopyAsync(
+            http,
+            HttpMethod.Get,
+            "documents/" + evidenceId,
+            session!.Value.Bearer,
+            "employee",
+            Correlation(http),
+            http.RequestAborted).ConfigureAwait(false);
+    }
+
+    private static IResult? OtherPerson(HttpContext http)
+    {
+        var requested = http.Request.Query["subject"].ToString();
+        var subject = http.User.FindFirst("sub")?.Value ?? "";
+        if (string.IsNullOrWhiteSpace(requested) || string.Equals(requested, subject, StringComparison.Ordinal))
+            return null;
+        return Results.Json(
+            new { error = "Another person's record is not available in this workspace." },
+            statusCode: StatusCodes.Status403Forbidden);
     }
 
     private static async Task<IResult> OpenPath(HttpContext http)
