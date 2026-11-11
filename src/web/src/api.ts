@@ -224,6 +224,29 @@ export async function getSkills(): Promise<PersonSkill[]> {
   return body.skills ?? [];
 }
 
+export type EmployeeTask = {
+  stepId: string;
+  title: string;
+  skillCode: string;
+  dueOn: string;
+  status: string;
+  evidenceName?: string | null;
+};
+
+export function getTasks(): Promise<EmployeeTask[]> {
+  return readJson<{ tasks?: EmployeeTask[] }>("/api/tasks").then((body) => body.tasks ?? []);
+}
+
+export function getTask(stepId: string): Promise<EmployeeTask> {
+  return readJson<EmployeeTask>(`/api/tasks/${stepId}`);
+}
+
+export async function closeTask(stepId: string, body: { fileName: string; contentBase64: string }): Promise<EmployeeTask> {
+  const response = await postJson(`/api/tasks/${stepId}/close`, body);
+  if (!response.ok) throw new Error(await readError(response));
+  return (await response.json()) as EmployeeTask;
+}
+
 export async function getDocuments(): Promise<EvidenceDocument[]> {
   const body = await readJson<{ documents?: EvidenceDocument[] }>("/api/documents");
   return body.documents ?? [];

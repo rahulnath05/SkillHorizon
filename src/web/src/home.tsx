@@ -4,19 +4,21 @@ import { getDocuments, getHome, getSkills, type EmployeeHome, type EvidenceDocum
 import { DevelopmentPathPanel } from "./path";
 import { Sitting } from "./sitting";
 import { PublishedStandards } from "./standards";
+import { TaskPage, TasksPage } from "./tasks";
 import { useTitle } from "./ui";
 
 const screens = [
   { id: "dashboard", label: "Dashboard" },
   { id: "skills", label: "My skills" },
   { id: "path", label: "My path" },
+  { id: "tasks", label: "My tasks" },
   { id: "assessment", label: "Assessment" },
   { id: "documents", label: "My documents" },
 ];
 
 export function EmployeeHome() {
-  const { screen } = useParams();
-  const current = screens.some((item) => item.id === screen) ? screen! : "dashboard";
+  const { screen, stepId } = useParams();
+  const current = stepId || screen === "tasks" ? "tasks" : screens.some((item) => item.id === screen) ? screen! : "dashboard";
   return (
     <div className="home">
       <nav className="home-nav" aria-label="Employee">
@@ -29,6 +31,8 @@ export function EmployeeHome() {
       <div className="home-main">
         {current === "skills" ? <SkillsPage /> : null}
         {current === "path" ? <DevelopmentPathPanel /> : null}
+        {current === "tasks" && stepId ? <TaskPage /> : null}
+        {current === "tasks" && !stepId ? <TasksPage /> : null}
         {current === "assessment" ? <Sitting /> : null}
         {current === "documents" ? <DocumentsPage /> : null}
         {current === "dashboard" ? <DashboardPage /> : null}

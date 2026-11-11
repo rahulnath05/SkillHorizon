@@ -314,6 +314,19 @@ button { cursor: pointer; }
   font-size: 13px;
 }
 
+.task-close {
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid rgba(23, 34, 31, 0.1);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.task-close h2 {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+
 .team h1 {
   color: var(--ink);
 }

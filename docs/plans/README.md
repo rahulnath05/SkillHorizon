@@ -4,9 +4,9 @@ Working checklists for the build. The short order is [the sequencing note](../ar
 
 ## Current
 
-Next slice: [09 Employee tasks](09-employee-tasks.md).
+Next slice: [10 Manager workspace](10-manager-workspace.md).
 
-Slices 00 through 08 are done. Slices 09 through 17 build the remaining reference screens, and the queries, commands, and tables behind them. [07 Mira](07-mira.md) stays `not-started` until 17 is done.
+Slices 00 through 09 are done. Slices 10 through 17 build the remaining reference screens, and the queries, commands, and tables behind them. [07 Mira](07-mira.md) stays `not-started` until 17 is done.
 
 ## Status rule
 
@@ -36,7 +36,7 @@ At the start of a build session, read `Current` and open that child. Do the firs
 | 06 Territories | [06-territories.md](06-territories.md) | done |
 | 07 Mira | [07-mira.md](07-mira.md) | not-started |
 | 08 Employee home | [08-employee-home.md](08-employee-home.md) | done |
-| 09 Employee tasks | [09-employee-tasks.md](09-employee-tasks.md) | not-started |
+| 09 Employee tasks | [09-employee-tasks.md](09-employee-tasks.md) | done |
 | 10 Manager workspace | [10-manager-workspace.md](10-manager-workspace.md) | not-started |
 | 11 Catalogue | [11-catalogue.md](11-catalogue.md) | not-started |
 | 12 Practice review | [12-practice-review.md](12-practice-review.md) | not-started |
