@@ -10,11 +10,13 @@ public sealed class PostgresPersonGap : IPersonGap
 
     private readonly NpgsqlDataSource _dataSource;
     private readonly IAuditLog _audit;
+    private readonly IPracticeProjection _practice;
 
-    public PostgresPersonGap(NpgsqlDataSource dataSource, IAuditLog audit)
+    public PostgresPersonGap(NpgsqlDataSource dataSource, IAuditLog audit, IPracticeProjection practice)
     {
         _dataSource = dataSource;
         _audit = audit;
+        _practice = practice;
     }
 
     public async Task<IReadOnlyList<SkillGap>> ApplyAsync(
@@ -118,6 +120,7 @@ public sealed class PostgresPersonGap : IPersonGap
             transaction,
             new AuditEntry(subjectId, "result.sealed", "readiness.sealed_result", resultId, correlationId, JsonSerializer.Serialize(skills, Json)),
             cancellationToken).ConfigureAwait(false);
+        await _practice.MarkDirtyAsync(connection, transaction, cancellationToken).ConfigureAwait(false);
         var gap = await Gaps(connection, transaction, subjectId, cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return gap;

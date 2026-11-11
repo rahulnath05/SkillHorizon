@@ -48,6 +48,10 @@ public sealed class SkillHorizonOptions
 
     public bool ReplicateReference { get; set; } = true;
 
+    public bool ProjectPracticeOnStartup { get; set; }
+
+    public int PracticeProjectionIntervalSeconds { get; set; }
+
     public OidcOptions Oidc { get; set; } = new();
 }
 

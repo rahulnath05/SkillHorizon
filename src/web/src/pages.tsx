@@ -4,6 +4,7 @@ import { chooseWorkspace, signIn, signOut, useShell } from "./api";
 import { activeWorkspaceCode, resolveDestination, type ShellState } from "./shell";
 import { Gate, Loading, Platform, useTitle } from "./ui";
 import { DevelopmentPathPanel, TeamPaths } from "./path";
+import { PackSubmission, PracticePanel } from "./practice";
 import { Sitting } from "./sitting";
 import { PublishedStandards, StandardsAuthoring } from "./standards";
 import { TeamDirectory } from "./team";
@@ -236,8 +237,9 @@ export function WorkspacePage() {
   const copy = workspaceCopy(code);
   const team = code === "people_manager";
   const authoring = code === "learning_and_development";
+  const practice = code === "competency_lead";
   const published = code === "employee" || code === "people_manager";
-  const wide = team || authoring || published;
+  const wide = team || authoring || published || practice;
   return (
     <Platform shell={shell}>
       <main className="workspace" id="main" data-screen="workspace" data-workspace={code}>
@@ -245,10 +247,12 @@ export function WorkspacePage() {
           {team ? <TeamDirectory /> : null}
           {team ? <TeamPaths /> : null}
           {authoring ? <StandardsAuthoring /> : null}
+          {authoring ? <PackSubmission /> : null}
+          {practice ? <PracticePanel /> : null}
           {code === "employee" ? <Sitting /> : null}
           {code === "employee" ? <DevelopmentPathPanel /> : null}
           {published ? <PublishedStandards /> : null}
-          {!team && !authoring && !published ? (
+          {!team && !authoring && !published && !practice ? (
             <>
               <p className="eyebrow">Active workspace</p>
               <h1>{copy.label}</h1>

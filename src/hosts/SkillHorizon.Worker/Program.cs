@@ -18,6 +18,7 @@ builder.Services.AddSkillHorizonMessaging(options);
 builder.Services.AddHostedService<WorkforceSyncWorker>();
 builder.Services.AddHostedService<ReferenceReplicationWorker>();
 builder.Services.AddHostedService<OutboxPublishWorker>();
+builder.Services.AddHostedService<PracticeProjectionWorker>();
 builder.Services.AddHealthChecks()
     .AddNpgSql(options.DomainConnectionString, name: "domain-postgres")
     .AddRedis(options.Redis, name: "redis");

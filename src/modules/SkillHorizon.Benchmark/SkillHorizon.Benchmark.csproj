@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SkillHorizon.Audit\SkillHorizon.Audit.csproj" />
+    <ProjectReference Include="..\SkillHorizon.Readiness\SkillHorizon.Readiness.csproj" />
     <ProjectReference Include="..\SkillHorizon.JobArchitecture\SkillHorizon.JobArchitecture.csproj" />
     <ProjectReference Include="..\SkillHorizon.Taxonomy\SkillHorizon.Taxonomy.csproj" />
     <ProjectReference Include="..\..\building-blocks\SkillHorizon.Messaging\SkillHorizon.Messaging.csproj" />

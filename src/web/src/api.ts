@@ -264,6 +264,83 @@ export async function getTeamPaths(): Promise<ReportPath[]> {
   return body.people ?? [];
 }
 
+export type PackRow = {
+  rowId: string;
+  jobProfileId: string;
+  profileCode: string;
+  profileName: string;
+  classification: string;
+  exceptionNote?: string | null;
+  benchmarkVersionId?: string | null;
+};
+
+export type AttestationPack = {
+  packId: string;
+  practiceCode: string;
+  status: string;
+  submittedBy: string;
+  taxonomyVersionId?: string | null;
+  leadSubjectId?: string | null;
+  sealedAt?: string | null;
+  rows: PackRow[];
+};
+
+export async function getPacks(practice?: string): Promise<AttestationPack[]> {
+  const path = practice ? `/api/packs?practice=${encodeURIComponent(practice)}` : "/api/packs";
+  const response = await fetch(path, { headers: { Accept: "application/json" }, cache: "no-store" });
+  if (!response.ok) throw new Error(await readError(response));
+  const body = (await response.json()) as { packs?: AttestationPack[] };
+  return body.packs ?? [];
+}
+
+export async function submitPack(body: {
+  practiceCode: string;
+  rows: { jobProfileId: string; classification: string; exceptionNote?: string }[];
+}): Promise<AttestationPack> {
+  const response = await postJson("/api/packs", body);
+  if (!response.ok) throw new Error(await readError(response));
+  const pack = (await response.json()) as AttestationPack;
+  return { ...pack, rows: pack.rows ?? [] };
+}
+
+export async function sealPack(packId: string): Promise<AttestationPack> {
+  const response = await postJson(`/api/packs/${packId}/seal`, {});
+  if (!response.ok) throw new Error(await readError(response));
+  const pack = (await response.json()) as AttestationPack;
+  return { ...pack, rows: pack.rows ?? [] };
+}
+
+export type PracticeSnapshot = {
+  practiceCode: string;
+  asOf: string;
+  dirty: boolean;
+  memberCount: number;
+  measuredCount: number;
+  gapCount: number;
+  cohortCount: number;
+};
+
+export async function getPracticeReadiness(practice: string): Promise<PracticeSnapshot | null> {
+  const response = await fetch(`/api/practice/readiness?practice=${encodeURIComponent(practice)}`, {
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error(await readError(response));
+  const body = (await response.json()) as { snapshot?: PracticeSnapshot | null };
+  return body.snapshot ?? null;
+}
+
+export async function createCohort(body: {
+  practiceCode: string;
+  countryCode?: string;
+  orgUnit?: string;
+  jobProfileId: string;
+  memberIds: string[];
+}): Promise<void> {
+  const response = await postJson("/api/cohorts", body);
+  if (!response.ok) throw new Error(await readError(response));
+}
+
 export async function validateStep(body: { subjectId: string; stepId: string }): Promise<void> {
   const response = await postJson("/api/validations", body);
   if (!response.ok) throw new Error(await readError(response));

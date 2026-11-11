@@ -26,6 +26,7 @@ Local sign-in identities, separated by who they are rather than by workspace:
 - `person-unmapped` is legal entity `LE-OTHER` and is refused. The API log line includes `zone=local` and `correlation_id`.
 - `person-nogrant` is mapped and has no workspace grant.
 - `person-ld` holds L&D only and opens that workspace directly.
+- `person-lead` holds Competency lead for the Data practice and opens that workspace directly.
 
 Development signing values are in `.env.example`. They are local defaults, not production secrets.
 

@@ -37,6 +37,7 @@ app.MapHealthChecks("/health");
 app.MapWorkforce();
 app.MapStandards();
 app.MapLearning();
+app.MapPractice();
 if (options.LoadStandardsFixture)
     app.Services.GetRequiredService<StandardsFixture>().LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
 app.Services.GetRequiredService<LearningAdmissionFixture>().LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
