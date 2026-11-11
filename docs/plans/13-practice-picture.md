@@ -2,7 +2,7 @@
 
 Parent: [Master plan](README.md)
 
-Status: `not-started`
+Status: `done`
 
 Depends on [12 Practice review](12-practice-review.md) being `done`.
 
@@ -18,8 +18,8 @@ Warehouse export, a live market feed, and Mira.
 
 | Step | Work | Status |
 |------|------|--------|
-| 13.1 | Baseline heatmap snapshot by skill and level for the practice. The page reads the snapshot and shows the as-of time | not-started |
-| 13.2 | Progression snapshot of path and step counts for the practice. The page reads that snapshot | not-started |
-| 13.3 | Market demand note and counts, authored in the authoring zone, replicated only when published, with no person rows | not-started |
-| 13.4 | Readiness page adds talent-group and country cuts from snapshots held in this zone. The cross-zone total stays the slice 06 aggregate | not-started |
-| 13.5 | Prove a response body and an evidence file are absent from these reads | not-started |
+| 13.1 | Baseline heatmap snapshot by skill and level for the practice. The page reads the snapshot and shows the as-of time | done |
+| 13.2 | Progression snapshot of path and step counts for the practice. The page reads that snapshot | done |
+| 13.3 | Market demand note and counts, authored in the authoring zone, replicated only when published, with no person rows | done |
+| 13.4 | Readiness page adds talent-group and country cuts from snapshots held in this zone. The cross-zone total stays the slice 06 aggregate | done |
+| 13.5 | Prove a response body and an evidence file are absent from these reads | done |

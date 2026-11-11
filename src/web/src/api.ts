@@ -538,6 +538,86 @@ export type PracticeSnapshot = {
   cohortCount: number;
 };
 
+export type HeatmapCell = {
+  skillCode: string;
+  skillName: string;
+  levelCode: string;
+  levelName: string;
+  levelRank: number;
+  proficiencyRank: number;
+  proficiencyName: string;
+};
+
+export type PracticeHeatmap = {
+  asOf: string | null;
+  cells: HeatmapCell[];
+};
+
+export type PracticeProgression = {
+  asOf: string | null;
+  pathCount: number;
+  stepCount: number;
+  openStepCount: number;
+};
+
+export type ReadinessCut = {
+  key: string;
+  memberCount: number;
+  measuredCount: number;
+  gapCount: number;
+  asOf: string;
+};
+
+export type PracticePicture = {
+  snapshot: PracticeSnapshot | null;
+  countries: ReadinessCut[];
+  talentGroups: ReadinessCut[];
+};
+
+export type MarketDemand = {
+  practiceCode: string;
+  note: string;
+  postingCount: number;
+  roleCount: number;
+  publishedAt?: string;
+  status?: string;
+  updatedAt?: string;
+};
+
+export async function getPracticeBaseline(practice: string): Promise<PracticeHeatmap> {
+  const body = await readOk<PracticeHeatmap>(`/api/practice/baseline?practice=${encodeURIComponent(practice)}`);
+  return { ...body, cells: body.cells ?? [] };
+}
+
+export async function getPracticeProgression(practice: string): Promise<PracticeProgression> {
+  return readOk(`/api/practice/progression?practice=${encodeURIComponent(practice)}`);
+}
+
+export async function getPracticeMarket(practice: string): Promise<MarketDemand | null> {
+  const body = await readOk<{ demand?: MarketDemand | null }>(`/api/practice/market?practice=${encodeURIComponent(practice)}`);
+  return body.demand ?? null;
+}
+
+export async function getPracticePicture(practice: string): Promise<PracticePicture> {
+  const body = await readOk<PracticePicture>(`/api/practice/readiness?practice=${encodeURIComponent(practice)}`);
+  return { snapshot: body.snapshot ?? null, countries: body.countries ?? [], talentGroups: body.talentGroups ?? [] };
+}
+
+export async function getCatalogueMarket(practice: string): Promise<{ draft: MarketDemand | null; published: MarketDemand | null }> {
+  const body = await readOk<{ draft?: MarketDemand | null; published?: MarketDemand | null }>(`/api/catalogue/market?practice=${encodeURIComponent(practice)}`);
+  return { draft: body.draft ?? null, published: body.published ?? null };
+}
+
+export async function saveMarketDraft(body: { practiceCode: string; note: string; postingCount: number; roleCount: number }): Promise<void> {
+  const response = await postJson("/api/market/draft", body);
+  if (!response.ok) throw new Error(await readError(response));
+}
+
+export async function publishMarket(practiceCode: string): Promise<void> {
+  const response = await postJson("/api/market/publish", { practiceCode });
+  if (!response.ok) throw new Error(await readError(response));
+}
+
 export async function getPracticeReadiness(practice: string): Promise<PracticeSnapshot | null> {
   const response = await fetch(`/api/practice/readiness?practice=${encodeURIComponent(practice)}`, {
     headers: { Accept: "application/json" },

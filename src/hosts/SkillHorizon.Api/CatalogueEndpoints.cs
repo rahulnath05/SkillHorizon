@@ -18,6 +18,9 @@ public static class CatalogueEndpoints
         app.MapPost("/catalogue/submissions", Send);
         app.MapGet("/catalogue/review", Review);
         app.MapGet("/catalogue/overview", Overview);
+        app.MapGet("/catalogue/market", Market);
+        app.MapPost("/commands/market/draft", SaveMarket);
+        app.MapPost("/commands/market/publish", PublishMarket);
         return app;
     }
 
@@ -183,6 +186,54 @@ public static class CatalogueEndpoints
         });
     }
 
+    private static async Task<IResult> Market(HttpContext context, IGrantCheck grants, IMarketDemand market, CancellationToken cancellationToken)
+    {
+        var refused = await Learning(context, grants, cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        var practice = context.Request.Query["practice"].ToString();
+        return Results.Ok(new
+        {
+            draft = await market.ReadDraftAsync(practice, cancellationToken).ConfigureAwait(false),
+            published = await market.ReadPublishedAsync(practice, cancellationToken).ConfigureAwait(false)
+        });
+    }
+
+    private static async Task<IResult> SaveMarket(HttpContext context, IGrantCheck grants, IMarketDemand market, MarketBody? body, CancellationToken cancellationToken)
+    {
+        var refused = await Learning(context, grants, cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        try
+        {
+            var draft = await market.SaveDraftAsync(body?.PracticeCode ?? "", body?.Note ?? "", body?.PostingCount ?? -1, body?.RoleCount ?? -1, cancellationToken).ConfigureAwait(false);
+            return Results.Ok(draft);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Results.Problem(title: "Market demand refused", detail: exception.Message, statusCode: StatusCodes.Status400BadRequest);
+        }
+    }
+
+    private static async Task<IResult> PublishMarket(HttpContext context, IGrantCheck grants, IMarketDemand market, MarketBody? body, CancellationToken cancellationToken)
+    {
+        var refused = await Learning(context, grants, cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        try
+        {
+            var publication = await market.PublishAsync(body?.PracticeCode ?? "", Subject(context), Correlation(context), cancellationToken).ConfigureAwait(false);
+            return Results.Ok(publication);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Results.Problem(title: "Market demand refused", detail: exception.Message, statusCode: StatusCodes.Status400BadRequest);
+        }
+    }
+
+    private static string Correlation(HttpContext context) =>
+        context.Items[SkillHorizonContext.CorrelationItem]?.ToString() is { Length: > 0 } value ? value : "market";
+
     private static object? Browser(TaxonomyVersionView? version)
     {
         if (version is null)
@@ -237,4 +288,6 @@ public static class CatalogueEndpoints
     private sealed record OpenBody(string? ProfileName, string? FrameworkCode, string? LevelCode);
 
     private sealed record SendBody(Guid BenchmarkVersionId);
+
+    private sealed record MarketBody(string? PracticeCode, string? Note, int? PostingCount, int? RoleCount);
 }

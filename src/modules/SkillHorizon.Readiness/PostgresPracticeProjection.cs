@@ -5,10 +5,12 @@ namespace SkillHorizon.Readiness;
 public sealed class PostgresPracticeProjection : IPracticeProjection
 {
     private readonly NpgsqlDataSource _dataSource;
+    private readonly IProgressCensus _progress;
 
-    public PostgresPracticeProjection(NpgsqlDataSource dataSource)
+    public PostgresPracticeProjection(NpgsqlDataSource dataSource, IProgressCensus progress)
     {
         _dataSource = dataSource;
+        _progress = progress;
     }
 
     public async Task MarkDirtyAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken cancellationToken)
@@ -41,7 +43,10 @@ public sealed class PostgresPracticeProjection : IPracticeProjection
         }
 
         foreach (var practice in practices)
+        {
             await Write(connection, practice, cancellationToken).ConfigureAwait(false);
+            await new PostgresPracticePicture().WriteAsync(connection, practice, _progress, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     public async Task<PracticeSnapshot?> ReadAsync(string practiceCode, CancellationToken cancellationToken)

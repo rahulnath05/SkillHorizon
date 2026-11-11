@@ -6,15 +6,21 @@ import {
   decideException,
   getPacks,
   getCatalogueReview,
+  getPracticeBaseline,
   getPracticeBriefing,
+  getPracticeMarket,
+  getPracticePicture,
+  getPracticeProgression,
   getStandards,
   markReviewed,
   sealPack,
   submitPack,
   type AttestationPack,
   type PracticeBriefing,
+  type PracticePicture,
   type Standards,
 } from "./api";
+import { formatAsOf } from "./ui";
 
 function SentForReview() {
   const [drafts, setDrafts] = useState<Awaited<ReturnType<typeof getCatalogueReview>>>([]);
@@ -150,6 +156,10 @@ const screens = [
   { id: "requests", label: "Profile requests" },
   { id: "review", label: "Review room" },
   { id: "sign-off", label: "Sign-off" },
+  { id: "baseline", label: "Baseline" },
+  { id: "progression", label: "Progression" },
+  { id: "market", label: "Market demand" },
+  { id: "readiness", label: "Readiness" },
 ];
 
 export function PracticeHome() {
@@ -168,6 +178,10 @@ export function PracticeHome() {
         {current === "requests" ? <RequestsPage /> : null}
         {current === "review" ? <ReviewPage /> : null}
         {current === "sign-off" ? <SignOffPage /> : null}
+        {current === "baseline" ? <BaselinePage /> : null}
+        {current === "progression" ? <ProgressionPage /> : null}
+        {current === "market" ? <MarketPage /> : null}
+        {current === "readiness" ? <ReadinessPage /> : null}
         {current === "briefing" ? <BriefingPage /> : null}
       </div>
     </div>
@@ -452,4 +466,148 @@ function RequestsPage() {
       </ul>
     </section>
   );
+}
+
+function BaselinePage() {
+  const picture = usePicture(getPracticeBaseline);
+  const heatmap = picture.value;
+  return (
+    <section data-screen="baseline">
+      <p className="eyebrow">Attested baseline</p>
+      <h1>Baseline</h1>
+      <p>Each cell is the attested target for a skill at a job level. The page reads the stored snapshot.</p>
+      {picture.problem ? <p className="gate-alert" role="alert">{picture.problem}</p> : null}
+      {heatmap?.asOf ? <p data-as-of={heatmap.asOf}>As of {formatAsOf(heatmap.asOf)}</p> : <p>No baseline snapshot has been written yet.</p>}
+      {heatmap && heatmap.cells.length === 0 && heatmap.asOf ? <p>No attested targets are in this snapshot.</p> : null}
+      {heatmap && heatmap.cells.length > 0 ? (
+        <table className="team-table">
+          <thead>
+            <tr><th>Skill</th><th>Level</th><th>Attested target</th></tr>
+          </thead>
+          <tbody>
+            {heatmap.cells.map((cell) => (
+              <tr key={`${cell.skillCode}-${cell.levelCode}`}>
+                <td><strong>{cell.skillName}</strong></td>
+                <td>{cell.levelName}</td>
+                <td>{cell.proficiencyName}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
+    </section>
+  );
+}
+
+function ProgressionPage() {
+  const picture = usePicture(getPracticeProgression);
+  const progression = picture.value;
+  return (
+    <section data-screen="progression">
+      <p className="eyebrow">Paths in this practice</p>
+      <h1>Progression</h1>
+      <p>Path and step counts for people in the practice cohorts. The page reads the stored snapshot.</p>
+      {picture.problem ? <p className="gate-alert" role="alert">{picture.problem}</p> : null}
+      {progression?.asOf ? <p data-as-of={progression.asOf}>As of {formatAsOf(progression.asOf)}</p> : <p>No progression snapshot has been written yet.</p>}
+      {progression?.asOf ? (
+        <ul className="home-figures">
+          <li><b>{progression.pathCount}</b><span>Paths</span></li>
+          <li><b>{progression.stepCount}</b><span>Steps</span></li>
+          <li><b>{progression.openStepCount}</b><span>Open steps</span></li>
+        </ul>
+      ) : null}
+    </section>
+  );
+}
+
+function MarketPage() {
+  const picture = usePicture(getPracticeMarket);
+  const demand = picture.value ?? null;
+  return (
+    <section data-screen="market">
+      <p className="eyebrow">Published demand</p>
+      <h1>Market demand</h1>
+      <p>The published note and counts for this practice. A draft stays in the authoring zone until it is published.</p>
+      {picture.problem ? <p className="gate-alert" role="alert">{picture.problem}</p> : null}
+      {demand ? (
+        <>
+          {demand.publishedAt ? <p data-as-of={demand.publishedAt}>Published {formatAsOf(demand.publishedAt)}</p> : null}
+          <p data-market-note={demand.note}>{demand.note}</p>
+          <ul className="home-figures">
+            <li><b>{demand.postingCount}</b><span>Postings</span></li>
+            <li><b>{demand.roleCount}</b><span>Roles</span></li>
+          </ul>
+        </>
+      ) : picture.ready && !picture.problem ? <p>No market demand has been published.</p> : null}
+    </section>
+  );
+}
+
+function ReadinessPage() {
+  const picture = usePicture(getPracticePicture);
+  const readiness = picture.value;
+  const snapshot = readiness?.snapshot ?? null;
+  return (
+    <section data-screen="readiness">
+      <p className="eyebrow">This zone</p>
+      <h1>Readiness</h1>
+      <p>Talent-group and country cuts are snapshots held in this zone. The cross-zone total stays the sum of each zone&apos;s stored counts.</p>
+      {picture.problem ? <p className="gate-alert" role="alert">{picture.problem}</p> : null}
+      {snapshot ? (
+        <>
+          <p data-as-of={snapshot.asOf}>As of {formatAsOf(snapshot.asOf)}</p>
+          <ul className="home-figures">
+            <li><b>{snapshot.memberCount}</b><span>Members in this zone</span></li>
+            <li><b>{snapshot.measuredCount}</b><span>Measured</span></li>
+            <li><b>{snapshot.gapCount}</b><span>Below the bar</span></li>
+            <li><b>{snapshot.cohortCount}</b><span>Cohorts</span></li>
+          </ul>
+        </>
+      ) : <p>No practice snapshot has been written yet.</p>}
+      <CutList title="Country" cuts={readiness?.countries ?? []} />
+      <CutList title="Talent group" cuts={readiness?.talentGroups ?? []} />
+    </section>
+  );
+}
+
+function CutList({ title, cuts }: { title: string; cuts: PracticePicture["countries"] }) {
+  return (
+    <>
+      <h2>{title}</h2>
+      {cuts.length === 0 ? <p>No {title.toLowerCase()} cut is in this snapshot.</p> : (
+        <ul className="gap-list">
+          {cuts.map((cut) => (
+            <li key={cut.key}>
+              <b>{cut.key}</b>
+              <span>{cut.memberCount} members · {cut.measuredCount} measured · {cut.gapCount} below the bar</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
+function usePicture<T>(load: (practice: string) => Promise<T>) {
+  const [value, setValue] = useState<T | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    let live = true;
+    load(practiceCode)
+      .then((next) => {
+        if (!live) return;
+        setValue(next);
+        setReady(true);
+      })
+      .catch((error: unknown) => {
+        if (!live) return;
+        setProblem(error instanceof Error ? error.message : "The snapshot could not be read.");
+        setReady(true);
+      });
+    return () => {
+      live = false;
+    };
+  }, [load]);
+  return { value, problem, ready };
 }
