@@ -15,6 +15,8 @@ public sealed record PathStepView(
 
 public sealed record DevelopmentPathView(Guid PathId, Guid BenchmarkVersionId, IReadOnlyList<PathStepView> Steps);
 
+public sealed record TaskRow(Guid StepId, string Title, string SkillCode, DateOnly DueOn, string Status, string? EvidenceName);
+
 public sealed record StoredValidation(Guid ValidationId, string ManagerEmployeeId, string ReportEmployeeId);
 
 public sealed class DevelopmentPaths
@@ -49,6 +51,71 @@ public sealed class DevelopmentPaths
         await using var connection = await _progress.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         var pathId = await LatestPath(connection, subject, cancellationToken).ConfigureAwait(false);
         return pathId is Guid id ? await Read(connection, id, cancellationToken).ConfigureAwait(false) : null;
+    }
+
+    public async Task<IReadOnlyList<TaskRow>> ListTasksAsync(string bearer, string workspace, string correlationId, string? requestedSubject, CancellationToken cancellationToken)
+    {
+        var subject = await OwnedSubject(bearer, workspace, correlationId, requestedSubject, cancellationToken).ConfigureAwait(false);
+        await using var connection = await _progress.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = new NpgsqlCommand(
+            """
+            SELECT step.step_id, step.title, step.skill_code, step.due_on, step.status, evidence.file_name
+            FROM progress.step AS step
+            LEFT JOIN LATERAL (
+                SELECT file_name FROM progress.evidence
+                WHERE step_id = step.step_id
+                ORDER BY recorded_at DESC
+                LIMIT 1) AS evidence ON true
+            WHERE step.subject_id = $1
+              AND step.provider = 'external'
+              AND step.status = 'assigned'
+              AND step.due_on IS NOT NULL
+              AND step.path_id = (
+                  SELECT latest.path_id
+                  FROM progress.path AS latest
+                  WHERE latest.subject_id = $1
+                  ORDER BY latest.created_at DESC
+                  LIMIT 1)
+            ORDER BY step.due_on, step.title
+            """,
+            connection);
+        command.Parameters.AddWithValue(subject);
+        return await ReadTasks(command, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<TaskRow> ReadTaskAsync(string bearer, string workspace, string correlationId, Guid stepId, string? requestedSubject, CancellationToken cancellationToken)
+    {
+        var subject = await OwnedSubject(bearer, workspace, correlationId, requestedSubject, cancellationToken).ConfigureAwait(false);
+        await using var connection = await _progress.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var task = await FindTask(connection, stepId, subject, cancellationToken).ConfigureAwait(false);
+        if (task is null)
+            throw new UnauthorizedAccessException("Another person's task is not available in this workspace.");
+        return task;
+    }
+
+    public async Task<TaskRow> CloseTaskAsync(
+        string bearer,
+        string workspace,
+        string correlationId,
+        Guid stepId,
+        string? requestedSubject,
+        string fileName,
+        byte[] content,
+        CancellationToken cancellationToken)
+    {
+        var subject = await OwnedSubject(bearer, workspace, correlationId, requestedSubject, cancellationToken).ConfigureAwait(false);
+        await using (var connection = await _progress.OpenConnectionAsync(cancellationToken).ConfigureAwait(false))
+        {
+            var task = await FindTask(connection, stepId, subject, cancellationToken).ConfigureAwait(false);
+            if (task is null)
+                throw new UnauthorizedAccessException("Another person's task is not available in this workspace.");
+            if (!string.Equals(task.Status, "assigned", StringComparison.Ordinal))
+                throw new InvalidOperationException("That step is already closed.");
+        }
+
+        await AddEvidenceAsync(bearer, workspace, correlationId, stepId, fileName, content, cancellationToken).ConfigureAwait(false);
+        await CompleteExternalAsync(bearer, workspace, correlationId, stepId, cancellationToken).ConfigureAwait(false);
+        return await ReadTaskAsync(bearer, workspace, correlationId, stepId, null, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<DevelopmentPathView> AddEvidenceAsync(
@@ -213,8 +280,8 @@ public sealed class DevelopmentPaths
         await using var command = new NpgsqlCommand(
             """
             INSERT INTO progress.step (
-                step_id, path_id, subject_id, provider, title, skill_code, benchmark_version_id, status, recorded_at)
-            SELECT $1, $2, $3, 'external', $4, $5, $6, 'assigned', now()
+                step_id, path_id, subject_id, provider, title, skill_code, benchmark_version_id, status, recorded_at, due_on)
+            SELECT $1, $2, $3, 'external', $4, $5, $6, 'assigned', now(), (timezone('utc', now()))::date + 28
             WHERE NOT EXISTS (
                 SELECT 1 FROM progress.step
                 WHERE path_id = $2 AND skill_code = $5)
@@ -312,6 +379,67 @@ public sealed class DevelopmentPaths
         if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             return null;
         return new StoredValidation(reader.GetGuid(0), reader.GetString(1), reader.GetString(2));
+    }
+
+    private async Task<string> OwnedSubject(string bearer, string workspace, string correlationId, string? requestedSubject, CancellationToken cancellationToken)
+    {
+        var subject = await Subject(bearer, workspace, correlationId, cancellationToken).ConfigureAwait(false);
+        if (!string.IsNullOrWhiteSpace(requestedSubject) && !string.Equals(requestedSubject, subject, StringComparison.Ordinal))
+            throw new UnauthorizedAccessException("Another person's task is not available in this workspace.");
+        return subject;
+    }
+
+    private static async Task<TaskRow?> FindTask(NpgsqlConnection connection, Guid stepId, string subjectId, CancellationToken cancellationToken)
+    {
+        await using var command = new NpgsqlCommand(
+            """
+            SELECT step.step_id, step.title, step.skill_code, step.due_on, step.status, evidence.file_name
+            FROM progress.step AS step
+            LEFT JOIN LATERAL (
+                SELECT file_name FROM progress.evidence
+                WHERE step_id = step.step_id
+                ORDER BY recorded_at DESC
+                LIMIT 1) AS evidence ON true
+            WHERE step.step_id = $1
+              AND step.subject_id = $2
+              AND step.provider = 'external'
+              AND step.path_id IS NOT NULL
+              AND step.due_on IS NOT NULL
+            """,
+            connection);
+        command.Parameters.AddWithValue(stepId);
+        command.Parameters.AddWithValue(subjectId);
+        var rows = await ReadTasks(command, cancellationToken).ConfigureAwait(false);
+        return rows.Count == 0 ? null : rows[0];
+    }
+
+    private static async Task<List<TaskRow>> ReadTasks(NpgsqlCommand command, CancellationToken cancellationToken)
+    {
+        var tasks = new List<TaskRow>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            tasks.Add(new TaskRow(
+                reader.GetGuid(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                ReadDate(reader, 3),
+                reader.GetString(4),
+                reader.IsDBNull(5) ? null : reader.GetString(5)));
+        }
+
+        return tasks;
+    }
+
+    private static DateOnly ReadDate(NpgsqlDataReader reader, int ordinal)
+    {
+        var value = reader.GetValue(ordinal);
+        return value switch
+        {
+            DateOnly date => date,
+            DateTime time => DateOnly.FromDateTime(time),
+            _ => throw new InvalidOperationException("A task due date could not be read.")
+        };
     }
 
     private async Task<string> Subject(string bearer, string workspace, string correlationId, CancellationToken cancellationToken)

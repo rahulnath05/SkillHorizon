@@ -207,6 +207,74 @@ app.MapGet("/paths/current", async (HttpContext context, DevelopmentPaths paths,
         return Results.Problem(title: "Path refused", detail: exception.Message, statusCode: StatusCodes.Status400BadRequest);
     }
 });
+app.MapGet("/tasks", async (HttpContext context, DevelopmentPaths paths, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var tasks = await paths.ListTasksAsync(
+            Incoming.Bearer(context),
+            Incoming.Workspace(context),
+            Incoming.Correlation(context),
+            context.Request.Query["subject"].ToString(),
+            cancellationToken).ConfigureAwait(false);
+        return Results.Ok(new { tasks });
+    }
+    catch (UnauthorizedAccessException exception)
+    {
+        return Results.Problem(title: "Task refused", detail: exception.Message, statusCode: StatusCodes.Status403Forbidden);
+    }
+    catch (InvalidOperationException exception)
+    {
+        return Results.Problem(title: "Task refused", detail: exception.Message, statusCode: StatusCodes.Status403Forbidden);
+    }
+});
+app.MapGet("/tasks/{stepId:guid}", async (Guid stepId, HttpContext context, DevelopmentPaths paths, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var task = await paths.ReadTaskAsync(
+            Incoming.Bearer(context),
+            Incoming.Workspace(context),
+            Incoming.Correlation(context),
+            stepId,
+            context.Request.Query["subject"].ToString(),
+            cancellationToken).ConfigureAwait(false);
+        return Results.Ok(task);
+    }
+    catch (UnauthorizedAccessException exception)
+    {
+        return Results.Problem(title: "Task refused", detail: exception.Message, statusCode: StatusCodes.Status403Forbidden);
+    }
+    catch (InvalidOperationException exception)
+    {
+        return Results.Problem(title: "Task refused", detail: exception.Message, statusCode: StatusCodes.Status403Forbidden);
+    }
+});
+app.MapPost("/tasks/{stepId:guid}/close", async (Guid stepId, HttpContext context, DevelopmentPaths paths, EvidenceBody? body, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var content = Convert.FromBase64String(body?.ContentBase64 ?? "");
+        var task = await paths.CloseTaskAsync(
+            Incoming.Bearer(context),
+            Incoming.Workspace(context),
+            Incoming.Correlation(context),
+            stepId,
+            context.Request.Query["subject"].ToString(),
+            body?.FileName ?? "",
+            content,
+            cancellationToken).ConfigureAwait(false);
+        return Results.Ok(task);
+    }
+    catch (UnauthorizedAccessException exception)
+    {
+        return Results.Problem(title: "Task refused", detail: exception.Message, statusCode: StatusCodes.Status403Forbidden);
+    }
+    catch (Exception exception) when (exception is InvalidOperationException or FormatException)
+    {
+        return Results.Problem(title: "Task refused", detail: exception.Message, statusCode: StatusCodes.Status400BadRequest);
+    }
+});
 app.MapPost("/paths/evidence", async (HttpContext context, DevelopmentPaths paths, EvidenceBody? body, CancellationToken cancellationToken) =>
 {
     try

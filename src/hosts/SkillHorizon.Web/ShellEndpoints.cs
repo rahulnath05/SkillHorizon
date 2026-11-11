@@ -34,6 +34,9 @@ public static class ShellEndpoints
         app.MapPost("/api/paths", (Delegate)OpenPath);
         app.MapGet("/api/path", (Delegate)ReadPath);
         app.MapPost("/api/paths/evidence", (Delegate)AddEvidence);
+        app.MapGet("/api/tasks", (Delegate)Tasks);
+        app.MapGet("/api/tasks/{stepId:guid}", (Delegate)ReadTask);
+        app.MapPost("/api/tasks/{stepId:guid}/close", (Delegate)CloseTask);
         app.MapGet("/api/team/paths", (Delegate)TeamPaths);
         app.MapPost("/api/validations", (Delegate)ValidateStep);
         app.MapPost("/api/benchmarks/draft", (Delegate)SaveBenchmark);
@@ -391,6 +394,45 @@ public static class ShellEndpoints
             return refused;
         var session = await Session(http).ConfigureAwait(false);
         return await LearningUser(http, HttpMethod.Get, "paths/current", session!.Value.Bearer, "employee", null).ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> Tasks(HttpContext http)
+    {
+        var refused = await EmployeeContext(http).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        var other = OtherPerson(http);
+        if (other is not null)
+            return other;
+        var session = await Session(http).ConfigureAwait(false);
+        return await LearningUser(http, HttpMethod.Get, "tasks", session!.Value.Bearer, "employee", null).ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> ReadTask(HttpContext http, Guid stepId)
+    {
+        var refused = await EmployeeContext(http).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        var other = OtherPerson(http);
+        if (other is not null)
+            return other;
+        var session = await Session(http).ConfigureAwait(false);
+        return await LearningUser(http, HttpMethod.Get, "tasks/" + stepId, session!.Value.Bearer, "employee", null).ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> CloseTask(HttpContext http, Guid stepId)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var refused = await EmployeeContext(http).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        var other = OtherPerson(http);
+        if (other is not null)
+            return other;
+        var session = await Session(http).ConfigureAwait(false);
+        var body = await ReadBody(http).ConfigureAwait(false);
+        return await LearningUser(http, HttpMethod.Post, "tasks/" + stepId + "/close", session!.Value.Bearer, "employee", body).ConfigureAwait(false);
     }
 
     private static async Task<IResult> AddEvidence(HttpContext http)
