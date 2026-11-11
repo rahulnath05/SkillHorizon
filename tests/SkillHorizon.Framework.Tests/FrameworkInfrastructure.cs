@@ -224,6 +224,8 @@ public sealed class FrameworkInfrastructure : IAsyncLifetime
         Environment.SetEnvironmentVariable("SkillHorizon__ReceiveReference", "false");
         Environment.SetEnvironmentVariable("SkillHorizon__ProjectPracticeOnStartup", "false");
         Environment.SetEnvironmentVariable("SkillHorizon__PracticeProjectionIntervalSeconds", "0");
+        Environment.SetEnvironmentVariable("SkillHorizon__ProjectTeamOnStartup", "false");
+        Environment.SetEnvironmentVariable("SkillHorizon__TeamProjectionIntervalSeconds", "0");
         Environment.SetEnvironmentVariable("SkillHorizon__AssessmentConnectionString", AssessmentConnection);
         Environment.SetEnvironmentVariable("SkillHorizon__ProgressConnectionString", ProgressConnection);
         Environment.SetEnvironmentVariable("SkillHorizon__EvidenceRoot", Path.Combine(Path.GetTempPath(), "skillhorizon-evidence-tests"));

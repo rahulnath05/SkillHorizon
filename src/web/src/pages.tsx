@@ -4,10 +4,9 @@ import { chooseWorkspace, signIn, signOut, useShell } from "./api";
 import { activeWorkspaceCode, resolveDestination, type ShellState } from "./shell";
 import { Gate, Loading, Platform, useTitle } from "./ui";
 import { EmployeeHome } from "./home";
-import { TeamPaths } from "./path";
 import { PackSubmission, PracticePanel } from "./practice";
-import { PublishedStandards, StandardsAuthoring } from "./standards";
-import { TeamDirectory } from "./team";
+import { StandardsAuthoring } from "./standards";
+import { ManagerHome } from "./manager";
 import { initials, workspaceCopy } from "./workspaces";
 
 const signInLede = "Skills intelligence for the whole firm. Choose the account you want to sign in with. This chooses who you are. It does not choose a workspace.";
@@ -238,21 +237,18 @@ export function WorkspacePage() {
   const team = code === "people_manager";
   const authoring = code === "learning_and_development";
   const practice = code === "competency_lead";
-  const published = code === "people_manager";
-  const wide = team || authoring || published || practice;
+  const wide = team || authoring || practice;
   return (
     <Platform shell={shell}>
       <main className="workspace" id="main" data-screen="workspace" data-workspace={code}>
         {code === "employee" ? <EmployeeHome /> : null}
-        {code === "employee" ? null : (
+        {code === "people_manager" ? <ManagerHome /> : null}
+        {code === "employee" || code === "people_manager" ? null : (
         <div className={wide ? "workspace-in team-in" : "workspace-in"}>
-          {team ? <TeamDirectory /> : null}
-          {team ? <TeamPaths /> : null}
           {authoring ? <StandardsAuthoring /> : null}
           {authoring ? <PackSubmission /> : null}
           {practice ? <PracticePanel /> : null}
-          {published ? <PublishedStandards /> : null}
-          {!team && !authoring && !published && !practice ? (
+          {!authoring && !practice ? (
             <>
               <p className="eyebrow">Active workspace</p>
               <h1>{copy.label}</h1>

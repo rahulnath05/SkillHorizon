@@ -322,6 +322,109 @@ export type ReportPath = {
   path: DevelopmentPath | null;
 };
 
+export type TeamMember = {
+  employeeId: string;
+  displayName: string;
+  position: string;
+  attention: boolean;
+};
+
+export type TeamSnapshot = {
+  asOf: string;
+  reportCount: number;
+  attentionCount: number;
+  members: TeamMember[];
+};
+
+export type ProfileReview = {
+  employeeId: string;
+  displayName: string;
+  jobProfileId: string;
+  profileName: string;
+};
+
+export type AssessmentReviewItem = {
+  employeeId: string;
+  displayName: string;
+  resultId: string;
+};
+
+export type PendingEvidence = {
+  stepId: string;
+  subjectId: string;
+  displayName: string;
+  title: string;
+  fileName: string;
+};
+
+export type TeamSkillMeasure = {
+  skillCode: string;
+  skillName: string;
+  currentRank: number;
+  currentName: string;
+  targetRank: number;
+  targetName: string;
+};
+
+export type TeamSkillPerson = {
+  employeeId: string;
+  displayName: string;
+  position: string;
+  skills: TeamSkillMeasure[];
+};
+
+export type CoachingCommitment = {
+  commitmentId: string;
+  employeeId: string;
+  displayName: string;
+  title: string;
+  dueOn: string;
+};
+
+export function getTeamSnapshot(): Promise<TeamSnapshot | null> {
+  return readJson<{ snapshot?: TeamSnapshot | null }>("/api/team/snapshot").then((body) => body.snapshot ?? null);
+}
+
+export function getTeamReviews(): Promise<{ profiles: ProfileReview[]; assessments: AssessmentReviewItem[] }> {
+  return readJson<{ profiles?: ProfileReview[]; assessments?: AssessmentReviewItem[] }>("/api/team/reviews").then((body) => ({
+    profiles: body.profiles ?? [],
+    assessments: body.assessments ?? [],
+  }));
+}
+
+export function getTeamEvidence(): Promise<PendingEvidence[]> {
+  return readJson<{ evidence?: PendingEvidence[] }>("/api/team/evidence").then((body) => body.evidence ?? []);
+}
+
+export function getTeamSkills(): Promise<TeamSkillPerson[]> {
+  return readJson<{ people?: TeamSkillPerson[] }>("/api/team/skills").then((body) => body.people ?? []);
+}
+
+export function getCommitments(): Promise<CoachingCommitment[]> {
+  return readJson<{ commitments?: CoachingCommitment[] }>("/api/team/commitments").then((body) => body.commitments ?? []);
+}
+
+async function postOk(path: string, body: unknown): Promise<void> {
+  const response = await postJson(path, body);
+  if (!response.ok) throw new Error(await readError(response));
+}
+
+export function confirmProfile(subjectId: string): Promise<void> {
+  return postOk("/api/team/profile-confirmations", { subjectId });
+}
+
+export function reviewAssessment(subjectId: string, note: string): Promise<void> {
+  return postOk("/api/team/assessment-reviews", { subjectId, note });
+}
+
+export function fileCorrection(subjectId: string, note: string): Promise<void> {
+  return postOk("/api/team/corrections", { subjectId, note });
+}
+
+export function createCommitment(body: { subjectId: string; title: string; dueOn: string }): Promise<void> {
+  return postOk("/api/team/commitments", body);
+}
+
 export async function getTeamPaths(): Promise<ReportPath[]> {
   const response = await fetch("/api/team/paths", {
     headers: { Accept: "application/json" },

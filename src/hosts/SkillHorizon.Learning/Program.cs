@@ -295,6 +295,22 @@ app.MapPost("/paths/evidence", async (HttpContext context, DevelopmentPaths path
         return Results.Problem(title: "Evidence refused", detail: "That evidence was not stored.", statusCode: StatusCodes.Status400BadRequest);
     }
 });
+app.MapGet("/team/evidence", async (HttpContext context, DevelopmentPaths paths, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var evidence = await paths.ListPendingEvidenceAsync(
+            Incoming.Bearer(context),
+            Incoming.Workspace(context),
+            Incoming.Correlation(context),
+            cancellationToken).ConfigureAwait(false);
+        return Results.Ok(new { evidence });
+    }
+    catch (InvalidOperationException exception)
+    {
+        return Results.Problem(title: "Evidence refused", detail: exception.Message, statusCode: StatusCodes.Status403Forbidden);
+    }
+});
 app.MapPost("/validations", async (HttpContext context, DevelopmentPaths paths, ValidationBody? body, CancellationToken cancellationToken) =>
 {
     try

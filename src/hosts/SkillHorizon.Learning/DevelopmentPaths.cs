@@ -243,6 +243,48 @@ public sealed class DevelopmentPaths
             throw new InvalidOperationException("That external step is not on this path.");
     }
 
+    public async Task<IReadOnlyList<PendingEvidence>> ListPendingEvidenceAsync(string bearer, string workspace, string correlationId, CancellationToken cancellationToken)
+    {
+        var team = await Core<TeamBody>(HttpMethod.Get, "workforce/team", bearer, workspace, correlationId, null, cancellationToken).ConfigureAwait(false);
+        var people = team.People ?? [];
+        if (people.Length == 0)
+            return [];
+        var names = people.ToDictionary(person => person.EmployeeId, person => person.DisplayName);
+        await using var connection = await _progress.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = new NpgsqlCommand(
+            """
+            SELECT step.step_id, step.subject_id, step.title, evidence.file_name
+            FROM progress.step AS step
+            JOIN LATERAL (
+                SELECT file_name FROM progress.evidence
+                WHERE step_id = step.step_id
+                ORDER BY recorded_at DESC
+                LIMIT 1) AS evidence ON true
+            WHERE step.subject_id = ANY($1)
+              AND step.path_id IS NOT NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM progress.validation AS validation
+                  WHERE validation.step_id = step.step_id)
+            ORDER BY step.subject_id, step.title
+            """,
+            connection);
+        command.Parameters.Add(new NpgsqlParameter { Value = names.Keys.ToArray(), NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Text });
+        var pending = new List<PendingEvidence>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            var subject = reader.GetString(1);
+            pending.Add(new PendingEvidence(
+                reader.GetGuid(0),
+                subject,
+                names[subject],
+                reader.GetString(2),
+                reader.GetString(3)));
+        }
+
+        return pending;
+    }
+
     public async Task<IReadOnlyList<ReportPath>> TeamAsync(string bearer, string workspace, string correlationId, CancellationToken cancellationToken)
     {
         var team = await Core<TeamBody>(HttpMethod.Get, "workforce/team", bearer, workspace, correlationId, null, cancellationToken).ConfigureAwait(false);
@@ -485,5 +527,7 @@ public sealed class DevelopmentPaths
 
     private sealed record TeamPerson(string EmployeeId, string DisplayName);
 }
+
+public sealed record PendingEvidence(Guid StepId, string SubjectId, string DisplayName, string Title, string FileName);
 
 public sealed record ReportPath(string EmployeeId, string DisplayName, DevelopmentPathView? Path);
