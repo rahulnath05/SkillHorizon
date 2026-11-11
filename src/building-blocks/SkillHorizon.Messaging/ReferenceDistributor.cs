@@ -77,7 +77,7 @@ public sealed class ReferenceDistributor
             """
             SELECT outbox.outbox_id, outbox.zone_id, outbox.message_type, outbox.payload::text, outbox.correlation_id, outbox.occurred_at
             FROM messaging.outbox AS outbox
-            WHERE outbox.message_type IN ('taxonomy.published', 'benchmark.published')
+            WHERE outbox.message_type IN ('taxonomy.published', 'benchmark.published', 'market.published')
               AND outbox.zone_id <> $1
               AND NOT EXISTS (
                   SELECT 1

@@ -1,6 +1,7 @@
 using Npgsql;
 using SkillHorizon.Access;
 using SkillHorizon.Attestation;
+using SkillHorizon.Benchmark;
 using SkillHorizon.Hosting;
 using SkillHorizon.Readiness;
 
@@ -17,6 +18,9 @@ public static class PracticeEndpoints
         app.MapPost("/commands/packs/{packId:guid}/seal", SealPack);
         app.MapGet("/packs", ListPacks);
         app.MapGet("/practice/briefing", Briefing);
+        app.MapGet("/practice/baseline", Baseline);
+        app.MapGet("/practice/progression", Progression);
+        app.MapGet("/practice/market", Market);
         app.MapGet("/practice/requests", Requests);
         app.MapPost("/practice/requests/{requestId:guid}/accept", AcceptRequest);
         app.MapPost("/commands/cohorts/limit", SetLimit);
@@ -208,7 +212,7 @@ public static class PracticeEndpoints
         return Results.Problem(title: title, detail: exception.Message, statusCode: status);
     }
 
-    private static async Task<IResult> ReadSnapshot(HttpContext context, IGrantCheck grants, IPracticeScope scope, IPracticeProjection projection, CancellationToken cancellationToken)
+    private static async Task<IResult> ReadSnapshot(HttpContext context, IGrantCheck grants, IPracticeScope scope, IPracticeProjection projection, NpgsqlDataSource dataSource, CancellationToken cancellationToken)
     {
         var refused = await Refuse(context, grants, Workspaces.CompetencyLead, cancellationToken).ConfigureAwait(false);
         if (refused is not null)
@@ -217,7 +221,45 @@ public static class PracticeEndpoints
         if (!await scope.HoldsAsync(Subject(context), practice, cancellationToken).ConfigureAwait(false))
             return Results.Problem(title: "Scope required", detail: "That practice is outside this lead's scope.", statusCode: StatusCodes.Status403Forbidden);
         var snapshot = await projection.ReadAsync(practice, cancellationToken).ConfigureAwait(false);
-        return Results.Ok(new { snapshot });
+        var store = new PracticePictureStore(dataSource);
+        var countries = await store.ReadCutsAsync(practice, "country", cancellationToken).ConfigureAwait(false);
+        var talentGroups = await store.ReadCutsAsync(practice, "talent_group", cancellationToken).ConfigureAwait(false);
+        return Results.Ok(new { snapshot, countries, talentGroups });
+    }
+
+    private static async Task<IResult> Baseline(HttpContext context, IGrantCheck grants, IPracticeScope scope, NpgsqlDataSource dataSource, CancellationToken cancellationToken)
+    {
+        var practice = await ScopedPractice(context, grants, scope, cancellationToken).ConfigureAwait(false);
+        if (practice.Refused is not null)
+            return practice.Refused;
+        return Results.Ok(await new PracticePictureStore(dataSource).ReadHeatmapAsync(practice.Code, cancellationToken).ConfigureAwait(false));
+    }
+
+    private static async Task<IResult> Progression(HttpContext context, IGrantCheck grants, IPracticeScope scope, NpgsqlDataSource dataSource, CancellationToken cancellationToken)
+    {
+        var practice = await ScopedPractice(context, grants, scope, cancellationToken).ConfigureAwait(false);
+        if (practice.Refused is not null)
+            return practice.Refused;
+        return Results.Ok(await new PracticePictureStore(dataSource).ReadProgressionAsync(practice.Code, cancellationToken).ConfigureAwait(false));
+    }
+
+    private static async Task<IResult> Market(HttpContext context, IGrantCheck grants, IPracticeScope scope, IMarketDemand market, CancellationToken cancellationToken)
+    {
+        var practice = await ScopedPractice(context, grants, scope, cancellationToken).ConfigureAwait(false);
+        if (practice.Refused is not null)
+            return practice.Refused;
+        return Results.Ok(new { demand = await market.ReadPublishedAsync(practice.Code, cancellationToken).ConfigureAwait(false) });
+    }
+
+    private static async Task<(IResult? Refused, string Code)> ScopedPractice(HttpContext context, IGrantCheck grants, IPracticeScope scope, CancellationToken cancellationToken)
+    {
+        var refused = await Refuse(context, grants, Workspaces.CompetencyLead, cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
+            return (refused, "");
+        var practice = context.Request.Query["practice"].ToString();
+        if (!await scope.HoldsAsync(Subject(context), practice, cancellationToken).ConfigureAwait(false))
+            return (Results.Problem(title: "Scope required", detail: "That practice is outside this lead's scope.", statusCode: StatusCodes.Status403Forbidden), "");
+        return (null, practice);
     }
 
     private static async Task<IResult> Learning(HttpContext context, IGrantCheck grants, CancellationToken cancellationToken, Func<Task<IResult>> action)

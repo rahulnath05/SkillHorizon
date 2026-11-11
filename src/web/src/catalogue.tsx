@@ -1,15 +1,18 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { NavLink, useParams } from "react-router-dom";
 import {
   getApprovals,
   getCatalogueBenchmark,
+  getCatalogueMarket,
   getCatalogueOverview,
   getCatalogueTaxonomy,
   getProfileRequests,
   getStandards,
   openProfileRequest,
   publishBenchmark,
+  publishMarket,
   saveBenchmarkDraft,
+  saveMarketDraft,
   saveTaxonomyDraft,
   sendDraft,
   type CatalogueBenchmark,
@@ -20,7 +23,7 @@ import {
   type Standards,
 } from "./api";
 import { PackSubmission } from "./practice";
-import { useTitle } from "./ui";
+import { formatAsOf, useTitle } from "./ui";
 
 const screens = [
   { id: "overview", label: "Overview" },
@@ -28,6 +31,7 @@ const screens = [
   { id: "workspace", label: "Benchmark workspace" },
   { id: "requests", label: "Profile requests" },
   { id: "approvals", label: "Approval queue" },
+  { id: "market", label: "Market demand" },
 ];
 
 export function CatalogueHome() {
@@ -47,6 +51,7 @@ export function CatalogueHome() {
         {current === "workspace" ? <WorkspacePage /> : null}
         {current === "requests" ? <RequestsPage /> : null}
         {current === "approvals" ? <ApprovalsPage /> : null}
+        {current === "market" ? <MarketPage /> : null}
         {current === "overview" ? <OverviewPage /> : null}
       </div>
     </div>
@@ -473,5 +478,92 @@ function Problem({ text, onRetry }: { text: string; onRetry: () => void }) {
       {text}
       <button type="button" className="team-retry" onClick={onRetry}>Try again</button>
     </p>
+  );
+}
+
+function MarketPage() {
+  const [note, setNote] = useState("Hiring for the data practice is concentrated in two roles.");
+  const [postingCount, setPostingCount] = useState("12");
+  const [roleCount, setRoleCount] = useState("2");
+  const [draftNote, setDraftNote] = useState<string | null>(null);
+  const [publishedNote, setPublishedNote] = useState<string | null>(null);
+  const [publishedAt, setPublishedAt] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  const load = useCallback(async () => {
+    const market = await getCatalogueMarket("data");
+    setDraftNote(market.draft?.note ?? null);
+    setPublishedNote(market.published?.note ?? null);
+    setPublishedAt(market.published?.publishedAt ?? null);
+    if (market.draft) {
+      setNote(market.draft.note);
+      setPostingCount(String(market.draft.postingCount));
+      setRoleCount(String(market.draft.roleCount));
+    }
+  }, []);
+
+  useEffect(() => {
+    void load().catch((error: unknown) => setProblem(error instanceof Error ? error.message : "Market demand could not be loaded."));
+  }, [load]);
+
+  function save(event: FormEvent) {
+    event.preventDefault();
+    const postings = Number(postingCount);
+    const roles = Number(roleCount);
+    if (!Number.isInteger(postings) || !Number.isInteger(roles) || postings < 0 || roles < 0) {
+      setProblem("Postings and roles are whole numbers.");
+      return;
+    }
+    setPending(true);
+    void saveMarketDraft({
+      practiceCode: "data",
+      note,
+      postingCount: postings,
+      roleCount: roles,
+    })
+      .then(() => load())
+      .then(() => setProblem(null))
+      .catch((error: unknown) => setProblem(error instanceof Error ? error.message : "The draft was refused."))
+      .finally(() => setPending(false));
+  }
+
+  function publish() {
+    setPending(true);
+    void publishMarket("data")
+      .then(() => load())
+      .then(() => setProblem(null))
+      .catch((error: unknown) => setProblem(error instanceof Error ? error.message : "Publish was refused."))
+      .finally(() => setPending(false));
+  }
+
+  return (
+    <section data-screen="catalogue-market">
+      <p className="eyebrow">Authoring zone</p>
+      <h1>Market demand</h1>
+      <p>Write the note and counts for the data practice. Publishing is what the competency lead can read.</p>
+      {problem ? <p className="gate-alert" role="alert">{problem}</p> : null}
+      <form className="task-close" onSubmit={save}>
+        <h2>Draft</h2>
+        <label>
+          Note
+          <textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={500} required />
+        </label>
+        <label>
+          Postings
+          <input inputMode="numeric" value={postingCount} onChange={(event) => setPostingCount(event.target.value)} required />
+        </label>
+        <label>
+          Roles
+          <input inputMode="numeric" value={roleCount} onChange={(event) => setRoleCount(event.target.value)} required />
+        </label>
+        <button type="submit" className="draft-save" disabled={pending || note.trim().length === 0}>Save draft</button>
+        <button type="button" className="draft-publish" disabled={pending || draftNote === null} onClick={publish}>Publish</button>
+      </form>
+      {draftNote ? <p data-draft-note={draftNote}>Draft: {draftNote}</p> : <p>No draft is stored.</p>}
+      {publishedNote ? (
+        <p data-published-note={publishedNote}>Published copy{publishedAt ? ` · ${formatAsOf(publishedAt)}` : ""}: {publishedNote}</p>
+      ) : <p>Nothing has been published for this practice.</p>}
+    </section>
   );
 }

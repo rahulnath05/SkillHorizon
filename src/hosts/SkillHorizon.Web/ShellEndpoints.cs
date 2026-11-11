@@ -59,12 +59,18 @@ public static class ShellEndpoints
         app.MapPost("/api/catalogue/submissions", (Delegate)SendDraft);
         app.MapGet("/api/catalogue/review", (Delegate)CatalogueReview);
         app.MapGet("/api/catalogue/overview", (Delegate)CatalogueOverview);
+        app.MapGet("/api/catalogue/market", (Delegate)CatalogueMarket);
+        app.MapPost("/api/market/draft", (Delegate)SaveMarket);
+        app.MapPost("/api/market/publish", (Delegate)PublishMarket);
         app.MapPost("/api/packs", (Delegate)SubmitPack);
         app.MapGet("/api/packs", (Delegate)ListPacks);
         app.MapPost("/api/packs/{packId:guid}/reviews", (Delegate)MarkReviewed);
         app.MapPost("/api/packs/{packId:guid}/decisions", (Delegate)DecideException);
         app.MapPost("/api/packs/{packId:guid}/seal", (Delegate)SealPack);
         app.MapGet("/api/practice/briefing", (Delegate)PracticeBriefing);
+        app.MapGet("/api/practice/baseline", (Delegate)PracticeBaseline);
+        app.MapGet("/api/practice/progression", (Delegate)PracticeProgression);
+        app.MapGet("/api/practice/market", (Delegate)PracticeMarket);
         app.MapGet("/api/practice/requests", (Delegate)PracticeRequests);
         app.MapPost("/api/practice/requests/{requestId:guid}/accept", (Delegate)AcceptPracticeRequest);
         app.MapPost("/api/cohorts", (Delegate)CreateCohort);
@@ -740,6 +746,46 @@ public static class ShellEndpoints
             return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
         var body = await ReadBody(http).ConfigureAwait(false);
         return await Proxy(http, HttpMethod.Post, "commands/cohorts", body).ConfigureAwait(false);
+    }
+
+    private static Task<IResult> CatalogueMarket(HttpContext http)
+    {
+        var practice = Uri.EscapeDataString(http.Request.Query["practice"].ToString());
+        return Proxy(http, HttpMethod.Get, "catalogue/market?practice=" + practice, null);
+    }
+
+    private static async Task<IResult> SaveMarket(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var body = await ReadBody(http).ConfigureAwait(false);
+        return await Proxy(http, HttpMethod.Post, "commands/market/draft", body).ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> PublishMarket(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var body = await ReadBody(http).ConfigureAwait(false);
+        return await Proxy(http, HttpMethod.Post, "commands/market/publish", body).ConfigureAwait(false);
+    }
+
+    private static Task<IResult> PracticeBaseline(HttpContext http)
+    {
+        var practice = Uri.EscapeDataString(http.Request.Query["practice"].ToString());
+        return Proxy(http, HttpMethod.Get, "practice/baseline?practice=" + practice, null);
+    }
+
+    private static Task<IResult> PracticeProgression(HttpContext http)
+    {
+        var practice = Uri.EscapeDataString(http.Request.Query["practice"].ToString());
+        return Proxy(http, HttpMethod.Get, "practice/progression?practice=" + practice, null);
+    }
+
+    private static Task<IResult> PracticeMarket(HttpContext http)
+    {
+        var practice = Uri.EscapeDataString(http.Request.Query["practice"].ToString());
+        return Proxy(http, HttpMethod.Get, "practice/market?practice=" + practice, null);
     }
 
     private static Task<IResult> PracticeBriefing(HttpContext http)

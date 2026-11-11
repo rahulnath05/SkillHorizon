@@ -331,13 +331,18 @@ button { cursor: pointer; }
   font-size: 12px;
 }
 
-.task-close input, .task-close select {
+.task-close input, .task-close select, .task-close textarea {
   min-height: 36px;
   padding: 6px 8px;
   border: 1px solid rgba(23, 34, 31, 0.16);
   border-radius: 10px;
   background: var(--surface);
   color: var(--ink);
+}
+
+.task-close textarea {
+  min-height: 88px;
+  resize: vertical;
 }
 
 .task-close h2 {

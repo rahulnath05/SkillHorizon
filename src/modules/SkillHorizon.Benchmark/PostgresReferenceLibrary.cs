@@ -24,7 +24,7 @@ public sealed class PostgresReferenceLibrary : IReferenceLibrary
             """
             SELECT outbox.outbox_id, outbox.message_type, outbox.payload
             FROM messaging.outbox AS outbox
-            WHERE outbox.message_type IN ('taxonomy.published', 'benchmark.published')
+            WHERE outbox.message_type IN ('taxonomy.published', 'benchmark.published', 'market.published')
               AND NOT EXISTS (
                   SELECT 1 FROM reference.applied_message AS applied WHERE applied.outbox_id = outbox.outbox_id)
             ORDER BY outbox.occurred_at
@@ -44,6 +44,8 @@ public sealed class PostgresReferenceLibrary : IReferenceLibrary
                 await CopyTaxonomy(connection, transaction, payload, cancellationToken).ConfigureAwait(false);
             else if (type == BenchmarkModule.PublishedMessage)
                 await CopyBenchmark(connection, transaction, payload, cancellationToken).ConfigureAwait(false);
+            else if (type == BenchmarkModule.MarketPublishedMessage)
+                await CopyMarket(connection, transaction, payload, cancellationToken).ConfigureAwait(false);
 
             await using var applied = new NpgsqlCommand(
                 "INSERT INTO reference.applied_message (outbox_id, applied_at) VALUES ($1, now())",
@@ -78,6 +80,8 @@ public sealed class PostgresReferenceLibrary : IReferenceLibrary
             await CopyTaxonomy(connection, transaction, payload, cancellationToken).ConfigureAwait(false);
         else if (messageType == BenchmarkModule.PublishedMessage)
             await CopyBenchmark(connection, transaction, payload, cancellationToken).ConfigureAwait(false);
+        else if (messageType == BenchmarkModule.MarketPublishedMessage)
+            await CopyMarket(connection, transaction, payload, cancellationToken).ConfigureAwait(false);
 
         await using (var applied = new NpgsqlCommand(
             "INSERT INTO reference.applied_message (outbox_id, applied_at) VALUES ($1, now())",
@@ -249,6 +253,36 @@ public sealed class PostgresReferenceLibrary : IReferenceLibrary
         {
             Targets = targets.TryGetValue(version.BenchmarkVersionId, out var list) ? list : []
         }).ToArray();
+    }
+
+    private static async Task CopyMarket(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        string payload,
+        CancellationToken cancellationToken)
+    {
+        var publication = JsonSerializer.Deserialize<MarketPublication>(payload, Json)
+            ?? throw new InvalidOperationException("The market publication could not be read.");
+        if (string.IsNullOrWhiteSpace(publication.PracticeCode) || string.IsNullOrWhiteSpace(publication.Note))
+            throw new InvalidOperationException("The market publication could not be read.");
+        await using var command = new NpgsqlCommand(
+            """
+            INSERT INTO reference.market_demand (practice_code, note, posting_count, role_count, published_at)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (practice_code) DO UPDATE
+                SET note = EXCLUDED.note,
+                    posting_count = EXCLUDED.posting_count,
+                    role_count = EXCLUDED.role_count,
+                    published_at = EXCLUDED.published_at
+            """,
+            connection,
+            transaction);
+        command.Parameters.AddWithValue(publication.PracticeCode);
+        command.Parameters.AddWithValue(publication.Note);
+        command.Parameters.AddWithValue(publication.PostingCount);
+        command.Parameters.AddWithValue(publication.RoleCount);
+        command.Parameters.AddWithValue(publication.PublishedAt);
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task CopyTaxonomy(

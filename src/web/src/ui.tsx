@@ -4,6 +4,19 @@ import { signOut } from "./api";
 import type { ShellState } from "./shell";
 import { initials, workspaceCopy } from "./workspaces";
 
+export function formatAsOf(value: string): string {
+  const time = new Date(value);
+  if (Number.isNaN(time.getTime())) return value;
+  return `${time.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })} IST`;
+}
+
 export function useTitle(title: string) {
   useEffect(() => {
     document.title = title === "SkillHorizon" ? title : `${title} · SkillHorizon`;
