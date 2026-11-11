@@ -114,6 +114,7 @@ services:
       SkillHorizon__ApiUrl: http://api:8080
       SkillHorizon__AssessmentConnectionString: Host=postgres;Port=5432;Database=skillhorizon_assessment;Username=skillhorizon;Password=skillhorizon
       SkillHorizon__ProgressConnectionString: Host=postgres;Port=5432;Database=skillhorizon_progress;Username=skillhorizon;Password=skillhorizon
+      SkillHorizon__EvidenceRoot: /tmp/skillhorizon-evidence
       SKILLHORIZON_SECRET_LEARNING_SERVICE_KEY: local-learning-key
     depends_on:
       postgres:

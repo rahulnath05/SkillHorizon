@@ -129,6 +129,53 @@ public sealed class PostgresPersonGap : IPersonGap
         return await Gaps(connection, null, subjectId, cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<PathPlan> PlanAsync(string subjectId, CancellationToken cancellationToken)
+    {
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        Guid resultId;
+        Guid benchmarkVersionId;
+        await using (var current = new NpgsqlCommand(
+            """
+            SELECT result.result_id, published.benchmark_version_id
+            FROM readiness.sealed_result AS result
+            JOIN benchmark.version AS sealed ON sealed.benchmark_version_id = result.benchmark_version_id
+            JOIN benchmark.version AS published
+                ON published.job_profile_id = sealed.job_profile_id
+               AND published.status = 'published'
+            WHERE result.subject_id = $1
+            ORDER BY result.sealed_at DESC
+            LIMIT 1
+            """,
+            connection))
+        {
+            current.Parameters.AddWithValue(subjectId);
+            await using var reader = await current.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                throw new InvalidOperationException("A path needs a sealed result and a published benchmark.");
+            resultId = reader.GetGuid(0);
+            benchmarkVersionId = reader.GetGuid(1);
+        }
+
+        var steps = new List<PathStepPlan>();
+        await using var command = new NpgsqlCommand(
+            """
+            SELECT target.skill_code, target.skill_name
+            FROM benchmark.target AS target
+            LEFT JOIN readiness.proficiency AS person
+                ON person.result_id = $2 AND person.skill_code = target.skill_code
+            WHERE target.benchmark_version_id = $1
+              AND COALESCE(person.proficiency_rank, 0) < target.proficiency_rank
+            ORDER BY target.skill_name
+            """,
+            connection);
+        command.Parameters.AddWithValue(benchmarkVersionId);
+        command.Parameters.AddWithValue(resultId);
+        await using var gapReader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await gapReader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            steps.Add(new PathStepPlan(gapReader.GetString(0), gapReader.GetString(1), "external"));
+        return new PathPlan(resultId, benchmarkVersionId, steps);
+    }
+
     private static async Task<Guid> ExistingResult(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,

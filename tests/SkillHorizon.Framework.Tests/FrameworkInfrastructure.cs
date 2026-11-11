@@ -213,6 +213,7 @@ public sealed class FrameworkInfrastructure : IAsyncLifetime
         Environment.SetEnvironmentVariable("SkillHorizon__ReplicateReference", "false");
         Environment.SetEnvironmentVariable("SkillHorizon__AssessmentConnectionString", AssessmentConnection);
         Environment.SetEnvironmentVariable("SkillHorizon__ProgressConnectionString", ProgressConnection);
+        Environment.SetEnvironmentVariable("SkillHorizon__EvidenceRoot", Path.Combine(Path.GetTempPath(), "skillhorizon-evidence-tests"));
         Environment.SetEnvironmentVariable("SkillHorizon__LearningUrl", "http://learning");
         Environment.SetEnvironmentVariable("SkillHorizon__LearningServiceKeySecretName", "learning-service-key");
         Environment.SetEnvironmentVariable("SkillHorizon__Secrets__learning-service-key", LearningKey);
@@ -376,6 +377,7 @@ public sealed class LearningFactory : WebApplicationFactory<LearningHost::Progra
             ["SkillHorizon:EnableConsoleExporter"] = "false",
             ["SkillHorizon:MigrateOnStartup"] = "true",
             ["SkillHorizon:LoadLearningFixture"] = "false",
+            ["SkillHorizon:EvidenceRoot"] = Path.Combine(Path.GetTempPath(), "skillhorizon-evidence-tests"),
             ["SkillHorizon:LearningServiceKeySecretName"] = "learning-service-key",
             ["SkillHorizon:Secrets:learning-service-key"] = FrameworkInfrastructure.LearningKey
         }));

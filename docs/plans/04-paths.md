@@ -2,7 +2,7 @@
 
 Parent: [Master plan](README.md)
 
-Status: `not-started`
+Status: `done`
 
 Depends on [03 Learning](03-learning.md) being `done`.
 
@@ -18,10 +18,10 @@ Practice packs, seals, cohort operations, and Mira. The external completion can 
 
 | Step | Work | Status |
 |------|------|--------|
-| 04.1 | Build a development path from a sealed result and the current benchmark version | not-started |
-| 04.2 | Step state in the progress database, including the provider named in slice 03 | not-started |
-| 04.3 | Evidence metadata on the step, with file bytes in object storage | not-started |
-| 04.4 | Manager validation command authorized by the core API against the current management relationship | not-started |
-| 04.5 | Store on the validation the manager and the relationship that were in force | not-started |
-| 04.6 | Test adapter reports an external completion and the same step moves to completed | not-started |
-| 04.7 | Audit the validation in the same transaction as the progress update | not-started |
+| 04.1 | Build a development path from a sealed result and the current benchmark version | done |
+| 04.2 | Step state in the progress database, including the provider named in slice 03 | done |
+| 04.3 | Evidence metadata on the step, with file bytes in object storage | done |
+| 04.4 | Manager validation command authorized by the core API against the current management relationship | done |
+| 04.5 | Store on the validation the manager and the relationship that were in force | done |
+| 04.6 | Test adapter reports an external completion and the same step moves to completed | done |
+| 04.7 | Audit the validation in the same transaction as the progress update | done |

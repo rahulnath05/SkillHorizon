@@ -219,6 +219,56 @@ export async function sealSitting(body: { token: string; sittingId: string }): P
   return sealed.gap ?? [];
 }
 
+export type PathStep = {
+  stepId: string;
+  skillCode: string;
+  title: string;
+  provider: string;
+  status: string;
+  evidenceName?: string | null;
+};
+
+export type DevelopmentPath = {
+  pathId: string;
+  benchmarkVersionId: string;
+  steps: PathStep[];
+};
+
+export async function openPath(): Promise<DevelopmentPath> {
+  const response = await postJson("/api/paths", {});
+  if (!response.ok) throw new Error(await readError(response));
+  const body = (await response.json()) as DevelopmentPath;
+  return { ...body, steps: body.steps ?? [] };
+}
+
+export async function addEvidence(body: { stepId: string; fileName: string; contentBase64: string }): Promise<DevelopmentPath> {
+  const response = await postJson("/api/paths/evidence", body);
+  if (!response.ok) throw new Error(await readError(response));
+  const next = (await response.json()) as DevelopmentPath;
+  return { ...next, steps: next.steps ?? [] };
+}
+
+export type ReportPath = {
+  employeeId: string;
+  displayName: string;
+  path: DevelopmentPath | null;
+};
+
+export async function getTeamPaths(): Promise<ReportPath[]> {
+  const response = await fetch("/api/team/paths", {
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error(await readError(response));
+  const body = (await response.json()) as { people?: ReportPath[] };
+  return body.people ?? [];
+}
+
+export async function validateStep(body: { subjectId: string; stepId: string }): Promise<void> {
+  const response = await postJson("/api/validations", body);
+  if (!response.ok) throw new Error(await readError(response));
+}
+
 export async function publishBenchmark(benchmarkVersionId: string): Promise<void> {
   const response = await postJson("/api/benchmarks/publish", { benchmarkVersionId });
   if (!response.ok) throw new Error(await readError(response));
