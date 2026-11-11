@@ -2,7 +2,7 @@
 
 Parent: [Master plan](README.md)
 
-Status: `not-started`
+Status: `done`
 
 Depends on [14 Activation](14-activation.md) being `done`.
 
@@ -18,8 +18,8 @@ Mira’s retrieval corpus, response text in the domain database, and the operati
 
 | Step | Work | Status |
 |------|------|--------|
-| 15.1 | Item bank lists items, skill, and difficulty. Writing an item requires the assessment authoring grant, not an employee grant | not-started |
-| 15.2 | A rubric stored on the item. A free-text response is marked in the assessment database. The sealed result still stores proficiencies only | not-started |
-| 15.3 | SME panel names an expert for a domain. The panel row holds no responses | not-started |
-| 15.4 | Sitting delivery chooses the next item from the previous answer. The employee page shows that item, not the bank | not-started |
-| 15.5 | Prove item text and response bodies are absent from the domain database and from logs | not-started |
+| 15.1 | Item bank lists items, skill, and difficulty. Writing an item requires the assessment authoring grant, not an employee grant | done |
+| 15.2 | A rubric stored on the item. A free-text response is marked in the assessment database. The sealed result still stores proficiencies only | done |
+| 15.3 | SME panel names an expert for a domain. The panel row holds no responses | done |
+| 15.4 | Sitting delivery chooses the next item from the previous answer. The employee page shows that item, not the bank | done |
+| 15.5 | Prove item text and response bodies are absent from the domain database and from logs | done |

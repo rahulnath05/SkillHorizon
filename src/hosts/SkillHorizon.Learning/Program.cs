@@ -47,6 +47,9 @@ builder.Services.AddSingleton(serviceProvider => new EmployeeRecord(
     serviceProvider.GetRequiredService<ProgressData>().Source,
     serviceProvider.GetRequiredService<CoreCaller>().Client,
     serviceProvider.GetRequiredService<IEvidenceFiles>()));
+builder.Services.AddSingleton(serviceProvider => new AssessmentBank(
+    serviceProvider.GetRequiredService<NpgsqlDataSource>(),
+    serviceProvider.GetRequiredService<CoreCaller>().Client));
 builder.Services.AddSingleton<ItemFixture>();
 builder.Services.AddHealthChecks()
     .AddNpgSql(options.AssessmentConnectionString, name: "assessment-postgres")
@@ -78,7 +81,7 @@ app.MapPost("/sittings/{sittingId:guid}/responses", async (Guid sittingId, HttpC
     try
     {
         var token = context.Request.Headers["X-Sitting-Token"].ToString();
-        return Results.Ok(await sessions.AnswerAsync(sittingId, token, body?.ItemId ?? Guid.Empty, body?.Rank ?? 0, cancellationToken).ConfigureAwait(false));
+        return Results.Ok(await sessions.AnswerAsync(sittingId, token, body?.ItemId ?? Guid.Empty, body?.Rank ?? 0, body?.ResponseBody, cancellationToken).ConfigureAwait(false));
     }
     catch (InvalidOperationException exception)
     {
@@ -340,6 +343,91 @@ app.MapPost("/progress/steps/{stepId:guid}/completions", async (Guid stepId, Htt
         return Results.Problem(title: "Completion refused", detail: exception.Message, statusCode: StatusCodes.Status400BadRequest);
     }
 });
+app.MapGet("/studio/bank", async (HttpContext context, AssessmentBank bank, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var items = await bank.ListAsync(Incoming.Bearer(context), Incoming.Workspace(context), Incoming.Correlation(context), cancellationToken).ConfigureAwait(false);
+        return Results.Ok(new { items });
+    }
+    catch (UnauthorizedAccessException exception)
+    {
+        return Results.Problem(title: "Studio refused", detail: exception.Message, statusCode: StatusCodes.Status403Forbidden);
+    }
+});
+app.MapPost("/studio/items", async (HttpContext context, AssessmentBank bank, ItemWrite? body, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var choices = body?.Choices?.Select(choice => (choice.Rank, choice.Label ?? "")).ToArray();
+        var item = await bank.WriteAsync(
+            Incoming.Bearer(context),
+            Incoming.Workspace(context),
+            Incoming.Correlation(context),
+            body?.SkillCode,
+            body?.Prompt,
+            body?.Difficulty ?? 0,
+            body?.Rubric,
+            choices,
+            cancellationToken).ConfigureAwait(false);
+        return Results.Ok(item);
+    }
+    catch (UnauthorizedAccessException exception)
+    {
+        return Results.Problem(title: "Studio refused", detail: exception.Message, statusCode: StatusCodes.Status403Forbidden);
+    }
+    catch (InvalidOperationException exception)
+    {
+        return Results.Problem(title: "Item refused", detail: exception.Message, statusCode: StatusCodes.Status400BadRequest);
+    }
+});
+app.MapGet("/studio/marks", async (HttpContext context, AssessmentBank bank, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var marks = await bank.MarksAsync(Incoming.Bearer(context), Incoming.Workspace(context), Incoming.Correlation(context), cancellationToken).ConfigureAwait(false);
+        return Results.Ok(new { marks });
+    }
+    catch (UnauthorizedAccessException exception)
+    {
+        return Results.Problem(title: "Studio refused", detail: exception.Message, statusCode: StatusCodes.Status403Forbidden);
+    }
+});
+app.MapGet("/studio/panel", async (HttpContext context, AssessmentBank bank, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var panel = await bank.PanelAsync(Incoming.Bearer(context), Incoming.Workspace(context), Incoming.Correlation(context), cancellationToken).ConfigureAwait(false);
+        return Results.Ok(new { panel });
+    }
+    catch (UnauthorizedAccessException exception)
+    {
+        return Results.Problem(title: "Studio refused", detail: exception.Message, statusCode: StatusCodes.Status403Forbidden);
+    }
+});
+app.MapPost("/studio/panel", async (HttpContext context, AssessmentBank bank, PanelWrite? body, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var expert = await bank.NameExpertAsync(
+            Incoming.Bearer(context),
+            Incoming.Workspace(context),
+            Incoming.Correlation(context),
+            body?.DomainName,
+            body?.ExpertName,
+            body?.Credentials,
+            cancellationToken).ConfigureAwait(false);
+        return Results.Ok(expert);
+    }
+    catch (UnauthorizedAccessException exception)
+    {
+        return Results.Problem(title: "Studio refused", detail: exception.Message, statusCode: StatusCodes.Status403Forbidden);
+    }
+    catch (InvalidOperationException exception)
+    {
+        return Results.Problem(title: "Panel refused", detail: exception.Message, statusCode: StatusCodes.Status400BadRequest);
+    }
+});
 app.MapGet("/team/paths", async (HttpContext context, DevelopmentPaths paths, CancellationToken cancellationToken) =>
 {
     try
@@ -369,7 +457,13 @@ public sealed class CoreCaller
     public HttpClient Client { get; }
 }
 
-public sealed record AnswerBody(Guid ItemId, int Rank);
+public sealed record AnswerBody(Guid ItemId, int Rank, string? ResponseBody);
+
+public sealed record ItemChoiceWrite(int Rank, string? Label);
+
+public sealed record ItemWrite(string? SkillCode, string? Prompt, int Difficulty, string? Rubric, ItemChoiceWrite[]? Choices);
+
+public sealed record PanelWrite(string? DomainName, string? ExpertName, string? Credentials);
 
 public sealed record ExternalStep(string Provider, string Title);
 

@@ -12,6 +12,7 @@ public static class LearningEndpoints
     {
         app.MapPost("/commands/activation/budget", SetBudget);
         app.MapGet("/activation/centre", Centre);
+        app.MapGet("/studio/author", Author);
         app.MapPost("/commands/waves/admit", Admit);
         app.MapPost("/commands/waves/rolling", Rolling);
         app.MapPost("/commands/sittings/authorize", Authorize);
@@ -31,6 +32,12 @@ public static class LearningEndpoints
             await waves.SetBudgetAsync(options.Value.ZoneId, body?.SittingBudget ?? 0, cancellationToken).ConfigureAwait(false);
             return Results.NoContent();
         });
+
+    private static async Task<IResult> Author(HttpContext context, IGrantCheck grants, CancellationToken cancellationToken)
+    {
+        var refused = await RefuseUnless(context, grants, Workspaces.LearningAndDevelopment, cancellationToken).ConfigureAwait(false);
+        return refused ?? Results.NoContent();
+    }
 
     private static async Task<IResult> Centre(HttpContext context, IGrantCheck grants, IWaveAdmission waves, Microsoft.Extensions.Options.IOptions<SkillHorizonOptions> options, CancellationToken cancellationToken)
     {

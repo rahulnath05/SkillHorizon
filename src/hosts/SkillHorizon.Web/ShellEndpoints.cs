@@ -39,6 +39,11 @@ public static class ShellEndpoints
         app.MapPost("/api/sittings/start", (Delegate)StartSitting);
         app.MapPost("/api/sittings/answer", (Delegate)AnswerSitting);
         app.MapPost("/api/sittings/seal", (Delegate)SealSitting);
+        app.MapGet("/api/studio/bank", (Delegate)StudioBank);
+        app.MapPost("/api/studio/items", (Delegate)StudioItem);
+        app.MapGet("/api/studio/marks", (Delegate)StudioMarks);
+        app.MapGet("/api/studio/panel", (Delegate)StudioPanel);
+        app.MapPost("/api/studio/panel", (Delegate)StudioExpert);
         app.MapPost("/api/progress/steps", (Delegate)AssignStep);
         app.MapPost("/api/paths", (Delegate)OpenPath);
         app.MapGet("/api/path", (Delegate)ReadPath);
@@ -320,6 +325,44 @@ public static class ShellEndpoints
         {
             return Results.Problem(title: "Sitting refused", detail: "The sitting could not be opened.", statusCode: StatusCodes.Status502BadGateway);
         }
+    }
+
+    private static Task<IResult> StudioBank(HttpContext http) =>
+        Studio(http, HttpMethod.Get, "studio/bank", null);
+
+    private static async Task<IResult> StudioItem(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var body = await ReadBody(http).ConfigureAwait(false);
+        return await Studio(http, HttpMethod.Post, "studio/items", body).ConfigureAwait(false);
+    }
+
+    private static Task<IResult> StudioMarks(HttpContext http) =>
+        Studio(http, HttpMethod.Get, "studio/marks", null);
+
+    private static Task<IResult> StudioPanel(HttpContext http) =>
+        Studio(http, HttpMethod.Get, "studio/panel", null);
+
+    private static async Task<IResult> StudioExpert(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var body = await ReadBody(http).ConfigureAwait(false);
+        return await Studio(http, HttpMethod.Post, "studio/panel", body).ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> Studio(HttpContext http, HttpMethod method, string path, string? json)
+    {
+        http.Response.Headers.CacheControl = "no-store";
+        if (http.User.Identity?.IsAuthenticated != true)
+            return Results.Unauthorized();
+        if (!string.Equals(http.User.FindFirst("active_workspace")?.Value, "learning_and_development", StringComparison.Ordinal))
+            return Results.Json(new { error = "Choose the learning and development workspace first." }, statusCode: StatusCodes.Status403Forbidden);
+        var session = await Session(http).ConfigureAwait(false);
+        if (session is null)
+            return Results.Unauthorized();
+        return await LearningUser(http, method, path, session.Value.Bearer, "learning_and_development", json).ConfigureAwait(false);
     }
 
     private static async Task<IResult> AnswerSitting(HttpContext http)

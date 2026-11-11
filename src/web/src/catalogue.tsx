@@ -28,6 +28,7 @@ import {
   type Standards,
 } from "./api";
 import { PackSubmission } from "./practice";
+import { StudioPage } from "./studio";
 import { formatAsOf, useTitle } from "./ui";
 
 const screens = [
@@ -38,6 +39,9 @@ const screens = [
   { id: "approvals", label: "Approval queue" },
   { id: "market", label: "Market demand" },
   { id: "activation", label: "Activation centre" },
+  { id: "bank", label: "Item bank" },
+  { id: "marking", label: "Rubric and marking" },
+  { id: "panel", label: "SME panel" },
 ];
 
 export function CatalogueHome() {
@@ -59,6 +63,7 @@ export function CatalogueHome() {
         {current === "approvals" ? <ApprovalsPage /> : null}
         {current === "market" ? <MarketPage /> : null}
         {current === "activation" ? <ActivationPage /> : null}
+        {current === "bank" || current === "marking" || current === "panel" ? <StudioPage screen={current} /> : null}
         {current === "overview" ? <OverviewPage /> : null}
       </div>
     </div>
