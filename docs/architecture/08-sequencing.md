@@ -46,6 +46,14 @@ Bring up the first three or four zones with the same template used for the first
 
 After that, each new territory is the ADR-013 procedure: provision, register, map entities, subscribe to reference data, enable the HR feed, then enable the capabilities and connectors that territory is ready for. No country-specific build.
 
+## 6a. Remaining reference screens, before Mira
+
+After the first territories, build the reference screens that slices 00 through 06 left thin or did not open. The children are 08 through 17 in [the build plans](../plans/README.md). Each child adds the page, the query or command, and the table it needs.
+
+Employee home and tasks come first, then the manager workspace, the L&D catalogue, the competency-lead review, the practice picture, activation, the assessment bank, assessment operations, and platform admin. A manager sees direct reports only. Item text and responses stay in the assessment database. An admin grant does not open a response or an evidence file. The persona switcher stays out.
+
+Mira is still slice 07. It waits until 17 is done.
+
 ## 7. Outbound aggregates, then Mira
 
 If A1 is answered, push aggregates to the warehouse. Mira’s conversational assessment is a later session on the learning-service boundary (ADR-004). She is not part of slices 0 through 6. The framework leaves a port for her. It does not call a model.
