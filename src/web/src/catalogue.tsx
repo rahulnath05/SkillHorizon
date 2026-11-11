@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { NavLink, useParams } from "react-router-dom";
 import {
+  admitRolling,
+  admitWave,
+  getActivationCentre,
   getApprovals,
   getCatalogueBenchmark,
   getCatalogueMarket,
@@ -11,10 +14,12 @@ import {
   openProfileRequest,
   publishBenchmark,
   publishMarket,
+  setActivationBudget,
   saveBenchmarkDraft,
   saveMarketDraft,
   saveTaxonomyDraft,
   sendDraft,
+  type ActivationCentre,
   type CatalogueBenchmark,
   type CatalogueOverview,
   type CatalogueTaxonomy,
@@ -32,6 +37,7 @@ const screens = [
   { id: "requests", label: "Profile requests" },
   { id: "approvals", label: "Approval queue" },
   { id: "market", label: "Market demand" },
+  { id: "activation", label: "Activation centre" },
 ];
 
 export function CatalogueHome() {
@@ -52,6 +58,7 @@ export function CatalogueHome() {
         {current === "requests" ? <RequestsPage /> : null}
         {current === "approvals" ? <ApprovalsPage /> : null}
         {current === "market" ? <MarketPage /> : null}
+        {current === "activation" ? <ActivationPage /> : null}
         {current === "overview" ? <OverviewPage /> : null}
       </div>
     </div>
@@ -564,6 +571,160 @@ function MarketPage() {
       {publishedNote ? (
         <p data-published-note={publishedNote}>Published copy{publishedAt ? ` · ${formatAsOf(publishedAt)}` : ""}: {publishedNote}</p>
       ) : <p>Nothing has been published for this practice.</p>}
+    </section>
+  );
+}
+
+function ActivationPage() {
+  useTitle("Activation centre");
+  const [centre, setCentre] = useState<ActivationCentre | null>(null);
+  const [versions, setVersions] = useState<{ id: string; name: string }[]>([]);
+  const [budget, setBudget] = useState("");
+  const [versionId, setVersionId] = useState("");
+  const [subjects, setSubjects] = useState("");
+  const [waveId, setWaveId] = useState("");
+  const [joiner, setJoiner] = useState("");
+  const [problem, setProblem] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  const load = useCallback(async () => {
+    const [next, standards] = await Promise.all([getActivationCentre(), getStandards()]);
+    setCentre(next);
+    const published = standards.history.filter((item) => item.status === "published");
+    setVersions(published.map((item) => ({ id: item.benchmarkVersionId, name: item.profileName })));
+    setVersionId((current) => (current && published.some((item) => item.benchmarkVersionId === current) ? current : published[0]?.benchmarkVersionId ?? ""));
+    setWaveId((current) => (current && next.waves.some((wave) => wave.waveId === current) ? current : next.waves[0]?.waveId ?? ""));
+    return next;
+  }, []);
+
+  useEffect(() => {
+    void load()
+      .then((next) => setBudget(next.sittingBudget === null ? "" : String(next.sittingBudget)))
+      .catch((error: unknown) => setProblem(error instanceof Error ? error.message : "The activation centre could not be loaded."));
+  }, [load]);
+
+  function run(work: () => Promise<unknown>, done: string, selectNewest = false) {
+    setPending(true);
+    setNotice(null);
+    void work()
+      .then(() => load())
+      .then((next) => {
+        if (selectNewest)
+          setWaveId(next.waves[0]?.waveId ?? "");
+        setProblem(null);
+        setNotice(done);
+      })
+      .catch((error: unknown) => setProblem(error instanceof Error ? error.message : "The activation centre refused that."))
+      .finally(() => setPending(false));
+  }
+
+  function saveBudget(event: FormEvent) {
+    event.preventDefault();
+    const sittingBudget = Number(budget);
+    if (!Number.isInteger(sittingBudget) || sittingBudget < 1) {
+      setProblem("The zone budget is a whole number of at least one sitting.");
+      return;
+    }
+    run(() => setActivationBudget(sittingBudget), "The zone budget is stored.");
+  }
+
+  function launch(event: FormEvent) {
+    event.preventDefault();
+    const subjectIds = subjects.split(/\s+/).map((item) => item.trim()).filter((item) => item.length > 0);
+    if (!versionId || subjectIds.length === 0) {
+      setProblem("Choose a published benchmark and name the people to launch.");
+      return;
+    }
+    run(() => admitWave(versionId, subjectIds), "The wave is open.", true);
+  }
+
+  function roll(event: FormEvent) {
+    event.preventDefault();
+    if (!waveId || joiner.trim().length === 0) {
+      setProblem("Choose an open wave and name the person who joined after it opened.");
+      return;
+    }
+    run(() => admitRolling(waveId, joiner.trim()), "Rolling intake admitted one person. The other admissions stay.");
+  }
+
+  const waves = centre?.waves ?? [];
+  const admitted = waves.reduce((total, wave) => total + wave.admittedCount, 0);
+
+  return (
+    <section data-screen="activation-centre">
+      <p className="eyebrow">Post-approval activation</p>
+      <h1>Activation centre</h1>
+      <p>Launch uses the zone sitting budget. Rolling intake admits one mapped person into an open wave and leaves the other admissions in place.</p>
+      {problem ? <p className="gate-alert" role="alert">{problem}</p> : null}
+      {notice ? <p role="status">{notice}</p> : null}
+      <ul className="home-figures">
+        <li><b data-budget={centre?.sittingBudget ?? ""}>{centre?.sittingBudget ?? "—"}</b><span>Zone budget</span></li>
+        <li><b>{waves.length}</b><span>Open waves</span></li>
+        <li><b data-admitted={admitted}>{admitted}</b><span>Admitted</span></li>
+      </ul>
+      <form className="task-close" onSubmit={saveBudget}>
+        <h2>Zone budget</h2>
+        <label>
+          Sittings
+          <input inputMode="numeric" value={budget} onChange={(event) => setBudget(event.target.value)} required />
+        </label>
+        <button type="submit" className="draft-save" disabled={pending}>Save budget</button>
+      </form>
+      {waves.length === 0 ? <p>No wave is open in this zone.</p> : (
+        <div className="team-scroll">
+          <table className="team-table">
+            <thead>
+              <tr>
+                <th>Opened</th>
+                <th>Profile</th>
+                <th>Admitted</th>
+                <th>People</th>
+              </tr>
+            </thead>
+            <tbody>
+              {waves.map((wave) => (
+                <tr key={wave.waveId} data-wave={wave.waveId}>
+                  <td>{formatAsOf(wave.openedAt)}</td>
+                  <td>{wave.profileName}</td>
+                  <td>{wave.admittedCount}</td>
+                  <td>{wave.subjectIds.join(", ")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <form className="task-close" onSubmit={launch}>
+        <h2>Launch</h2>
+        <label>
+          Published benchmark
+          <select value={versionId} onChange={(event) => setVersionId(event.target.value)} required>
+            {versions.length === 0 ? <option value="">No published benchmark</option> : null}
+            {versions.map((version) => <option key={version.id} value={version.id}>{version.name}</option>)}
+          </select>
+        </label>
+        <label>
+          People, one identifier per line
+          <textarea value={subjects} onChange={(event) => setSubjects(event.target.value)} required />
+        </label>
+        <button type="submit" className="draft-publish" disabled={pending || !versionId}>Launch</button>
+      </form>
+      <form className="task-close" onSubmit={roll}>
+        <h2>Rolling intake</h2>
+        <label>
+          Open wave
+          <select value={waveId} onChange={(event) => setWaveId(event.target.value)} required>
+            {waves.length === 0 ? <option value="">No open wave</option> : null}
+            {waves.map((wave) => <option key={wave.waveId} value={wave.waveId}>{wave.profileName} · {wave.admittedCount} admitted · {formatAsOf(wave.openedAt)}</option>)}
+          </select>
+        </label>
+        <label>
+          Person who joined after the wave opened
+          <input value={joiner} onChange={(event) => setJoiner(event.target.value)} required />
+        </label>
+        <button type="submit" className="draft-save" disabled={pending || !waveId}>Admit one</button>
+      </form>
     </section>
   );
 }

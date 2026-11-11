@@ -613,6 +613,41 @@ export async function saveMarketDraft(body: { practiceCode: string; note: string
   if (!response.ok) throw new Error(await readError(response));
 }
 
+export type ActivationWave = {
+  waveId: string;
+  benchmarkVersionId: string;
+  profileName: string;
+  population: number;
+  admittedCount: number;
+  openedAt: string;
+  subjectIds: string[];
+};
+
+export type ActivationCentre = {
+  sittingBudget: number | null;
+  waves: ActivationWave[];
+};
+
+export async function getActivationCentre(): Promise<ActivationCentre> {
+  const body = await readOk<ActivationCentre>("/api/activation/centre");
+  return { sittingBudget: body.sittingBudget ?? null, waves: body.waves ?? [] };
+}
+
+export async function setActivationBudget(sittingBudget: number): Promise<void> {
+  const response = await postJson("/api/activation/budget", { sittingBudget });
+  if (!response.ok) throw new Error(await readError(response));
+}
+
+export async function admitWave(benchmarkVersionId: string, subjectIds: string[]): Promise<void> {
+  const response = await postJson("/api/waves/admit", { benchmarkVersionId, subjectIds });
+  if (!response.ok) throw new Error(await readError(response));
+}
+
+export async function admitRolling(waveId: string, subjectId: string): Promise<void> {
+  const response = await postJson("/api/waves/rolling", { waveId, subjectId });
+  if (!response.ok) throw new Error(await readError(response));
+}
+
 export async function publishMarket(practiceCode: string): Promise<void> {
   const response = await postJson("/api/market/publish", { practiceCode });
   if (!response.ok) throw new Error(await readError(response));

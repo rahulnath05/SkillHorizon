@@ -11,7 +11,9 @@ public static class LearningEndpoints
     public static WebApplication MapLearning(this WebApplication app)
     {
         app.MapPost("/commands/activation/budget", SetBudget);
+        app.MapGet("/activation/centre", Centre);
         app.MapPost("/commands/waves/admit", Admit);
+        app.MapPost("/commands/waves/rolling", Rolling);
         app.MapPost("/commands/sittings/authorize", Authorize);
         app.MapGet("/assessment", Summary);
         app.MapGet("/internal/sittings/authorizations", InternalGrant);
@@ -30,6 +32,14 @@ public static class LearningEndpoints
             return Results.NoContent();
         });
 
+    private static async Task<IResult> Centre(HttpContext context, IGrantCheck grants, IWaveAdmission waves, Microsoft.Extensions.Options.IOptions<SkillHorizonOptions> options, CancellationToken cancellationToken)
+    {
+        var refused = await RefuseUnless(context, grants, Workspaces.LearningAndDevelopment, cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        return Results.Ok(await waves.ReadCentreAsync(options.Value.ZoneId, cancellationToken).ConfigureAwait(false));
+    }
+
     private static Task<IResult> Admit(HttpContext context, IGrantCheck grants, IWaveAdmission waves, Microsoft.Extensions.Options.IOptions<SkillHorizonOptions> options, AdmitRequest? body, CancellationToken cancellationToken) =>
         LearningCommand(context, grants, cancellationToken, async () =>
         {
@@ -38,6 +48,53 @@ public static class LearningEndpoints
             var wave = await waves.AdmitAsync(options.Value.ZoneId, body.BenchmarkVersionId, body.SubjectIds ?? [], Subject(context), Correlation(context), cancellationToken).ConfigureAwait(false);
             return Results.Ok(wave);
         });
+
+    private static async Task<IResult> Rolling(
+        HttpContext context,
+        IGrantCheck grants,
+        IWaveAdmission waves,
+        IZoneDirectory directory,
+        Microsoft.Extensions.Options.IOptions<SkillHorizonOptions> options,
+        RollingRequest? body,
+        CancellationToken cancellationToken)
+    {
+        var refused = await RefuseUnless(context, grants, Workspaces.LearningAndDevelopment, cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+
+        var subjectId = body?.SubjectId?.Trim() ?? "";
+        if (subjectId.Length == 0 || body is null || body.WaveId == Guid.Empty)
+            return Results.Problem(title: "Wave refused", detail: "Rolling intake admits one person into an open wave.", statusCode: StatusCodes.Status400BadRequest);
+
+        var person = await waves.FindPersonAsync(subjectId, cancellationToken).ConfigureAwait(false);
+        if (person is null)
+            return Results.Problem(title: "Wave refused", detail: "That person is not in this zone.", statusCode: StatusCodes.Status400BadRequest);
+
+        ZoneRoute? route;
+        try
+        {
+            route = await directory.FindByLegalEntityAsync(person.LegalEntityId, cancellationToken).ConfigureAwait(false);
+        }
+        catch (ZoneDirectoryUnavailableException)
+        {
+            return Results.Problem(title: "Zone directory unavailable", detail: "The legal-entity route could not be read.", statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+
+        if (route is null
+            || !string.Equals(route.ZoneId, options.Value.ZoneId, StringComparison.Ordinal)
+            || !string.Equals(route.Status, "active", StringComparison.OrdinalIgnoreCase))
+            return Results.Problem(title: "Wave refused", detail: "That legal entity is not mapped to this zone.", statusCode: StatusCodes.Status400BadRequest);
+
+        try
+        {
+            var wave = await waves.AdmitRollingAsync(options.Value.ZoneId, body.WaveId, subjectId, Subject(context), Correlation(context), cancellationToken).ConfigureAwait(false);
+            return Results.Ok(wave);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Results.Problem(title: "Wave refused", detail: exception.Message, statusCode: StatusCodes.Status400BadRequest);
+        }
+    }
 
     private static async Task<IResult> Authorize(HttpContext context, IGrantCheck grants, IWaveAdmission waves, AuthorizeRequest? body, CancellationToken cancellationToken)
     {
@@ -192,6 +249,8 @@ public static class LearningEndpoints
     private sealed record BudgetRequest(int SittingBudget);
 
     private sealed record AdmitRequest(Guid BenchmarkVersionId, string[]? SubjectIds);
+
+    private sealed record RollingRequest(Guid WaveId, string? SubjectId);
 
     private sealed record AuthorizeRequest(Guid WaveId);
 

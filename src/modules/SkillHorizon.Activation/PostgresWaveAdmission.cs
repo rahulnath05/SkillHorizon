@@ -91,7 +91,10 @@ public sealed class PostgresWaveAdmission : IWaveAdmission
         foreach (var subject in people)
         {
             await using var admit = new NpgsqlCommand(
-                "INSERT INTO activation.admission (wave_id, subject_id) VALUES ($1, $2)",
+                """
+                INSERT INTO activation.admission (wave_id, subject_id, admitted_at, route)
+                VALUES ($1, $2, now(), 'launch')
+                """,
                 connection,
                 transaction);
             admit.Parameters.AddWithValue(waveId);
@@ -106,6 +109,204 @@ public sealed class PostgresWaveAdmission : IWaveAdmission
             cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return new WaveAdmission(waveId, benchmarkVersionId, profileName, people.Length);
+    }
+
+    public async Task<ActivationCentre> ReadCentreAsync(string zoneId, CancellationToken cancellationToken)
+    {
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        int? budget = null;
+        await using (var command = new NpgsqlCommand(
+            "SELECT sitting_budget FROM activation.capacity WHERE zone_id = $1",
+            connection))
+        {
+            command.Parameters.AddWithValue(zoneId);
+            var found = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            if (found is int sittingBudget)
+                budget = sittingBudget;
+        }
+
+        var waves = new List<WaveListing>();
+        await using (var command = new NpgsqlCommand(
+            """
+            SELECT wave.wave_id, wave.benchmark_version_id, profile.display_name, wave.population,
+                   (SELECT count(*) FROM activation.admission AS admission WHERE admission.wave_id = wave.wave_id),
+                   wave.created_at
+            FROM activation.wave AS wave
+            JOIN benchmark.version AS version ON version.benchmark_version_id = wave.benchmark_version_id
+            JOIN job_architecture.job_profile AS profile ON profile.profile_id = version.job_profile_id
+            ORDER BY wave.created_at DESC
+            """,
+            connection))
+        await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+        {
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                waves.Add(new WaveListing(
+                    reader.GetGuid(0),
+                    reader.GetGuid(1),
+                    reader.GetString(2),
+                    reader.GetInt32(3),
+                    Convert.ToInt32(reader.GetValue(4)),
+                    reader.GetFieldValue<DateTimeOffset>(5),
+                    []));
+            }
+        }
+
+        for (var index = 0; index < waves.Count; index++)
+        {
+            var subjects = new List<string>();
+            await using var command = new NpgsqlCommand(
+                """
+                SELECT subject_id
+                FROM activation.admission
+                WHERE wave_id = $1
+                ORDER BY admitted_at, subject_id
+                """,
+                connection);
+            command.Parameters.AddWithValue(waves[index].WaveId);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                subjects.Add(reader.GetString(0));
+            waves[index] = waves[index] with { SubjectIds = subjects };
+        }
+
+        return new ActivationCentre(budget, waves);
+    }
+
+    public async Task<ZonePerson?> FindPersonAsync(string employeeId, CancellationToken cancellationToken)
+    {
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = new NpgsqlCommand(
+            """
+            SELECT employee_id, legal_entity_id, employment_status, joined_at
+            FROM workforce.person
+            WHERE employee_id = $1
+            """,
+            connection);
+        command.Parameters.AddWithValue(employeeId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            return null;
+        return new ZonePerson(
+            reader.GetString(0),
+            reader.GetString(1),
+            reader.GetString(2),
+            reader.IsDBNull(3) ? null : reader.GetFieldValue<DateTimeOffset>(3));
+    }
+
+    public async Task<WaveAdmission> AdmitRollingAsync(
+        string zoneId,
+        Guid waveId,
+        string subjectId,
+        string actorId,
+        string correlationId,
+        CancellationToken cancellationToken)
+    {
+        var personId = subjectId.Trim();
+        if (personId.Length == 0)
+            throw new InvalidOperationException("Rolling intake admits one person.");
+
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var budget = await LockBudget(connection, transaction, zoneId, cancellationToken).ConfigureAwait(false);
+        DateTimeOffset openedAt;
+        Guid benchmarkVersionId;
+        await using (var wave = new NpgsqlCommand(
+            """
+            SELECT benchmark_version_id, created_at
+            FROM activation.wave
+            WHERE wave_id = $1
+            FOR UPDATE
+            """,
+            connection,
+            transaction))
+        {
+            wave.Parameters.AddWithValue(waveId);
+            await using var reader = await wave.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                throw new InvalidOperationException("That wave is not open.");
+            benchmarkVersionId = reader.GetGuid(0);
+            openedAt = reader.GetFieldValue<DateTimeOffset>(1);
+        }
+
+        string employment;
+        DateTimeOffset? joinedAt;
+        await using (var person = new NpgsqlCommand(
+            """
+            SELECT employment_status, joined_at
+            FROM workforce.person
+            WHERE employee_id = $1
+            """,
+            connection,
+            transaction))
+        {
+            person.Parameters.AddWithValue(personId);
+            await using var reader = await person.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                throw new InvalidOperationException("That person is not in this zone.");
+            employment = reader.GetString(0);
+            joinedAt = reader.IsDBNull(1) ? null : reader.GetFieldValue<DateTimeOffset>(1);
+        }
+
+        if (employment != "active")
+            throw new InvalidOperationException("A closed person is not admitted.");
+        if (joinedAt is null || joinedAt <= openedAt)
+            throw new InvalidOperationException("That person joined before this wave opened.");
+
+        await using (var existing = new NpgsqlCommand(
+            "SELECT 1 FROM activation.admission WHERE wave_id = $1 AND subject_id = $2",
+            connection,
+            transaction))
+        {
+            existing.Parameters.AddWithValue(waveId);
+            existing.Parameters.AddWithValue(personId);
+            if (await existing.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) is not null)
+                throw new InvalidOperationException("That person is already admitted to this wave.");
+        }
+
+        int admitted;
+        await using (var count = new NpgsqlCommand(
+            "SELECT count(*) FROM activation.admission WHERE wave_id = $1",
+            connection,
+            transaction))
+        {
+            count.Parameters.AddWithValue(waveId);
+            admitted = Convert.ToInt32(await count.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false));
+        }
+
+        if (admitted + 1 > budget)
+            throw new InvalidOperationException("That population is over the zone budget.");
+
+        await using (var admit = new NpgsqlCommand(
+            """
+            INSERT INTO activation.admission (wave_id, subject_id, admitted_at, route)
+            VALUES ($1, $2, now(), 'rolling')
+            """,
+            connection,
+            transaction))
+        {
+            admit.Parameters.AddWithValue(waveId);
+            admit.Parameters.AddWithValue(personId);
+            await admit.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        await using (var grow = new NpgsqlCommand(
+            "UPDATE activation.wave SET population = population + 1 WHERE wave_id = $1",
+            connection,
+            transaction))
+        {
+            grow.Parameters.AddWithValue(waveId);
+            await grow.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        await _audit.WriteAsync(
+            connection,
+            transaction,
+            new AuditEntry(actorId, "wave.rolling", "activation.wave", waveId, correlationId, "{\"admitted\":1}"),
+            cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        var profileName = await ProfileName(benchmarkVersionId, cancellationToken).ConfigureAwait(false);
+        return new WaveAdmission(waveId, benchmarkVersionId, profileName, admitted + 1);
     }
 
     public async Task<IssuedSitting> AuthorizeAsync(Guid waveId, string subjectId, CancellationToken cancellationToken)

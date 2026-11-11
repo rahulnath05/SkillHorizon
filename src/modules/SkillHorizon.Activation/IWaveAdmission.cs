@@ -2,6 +2,19 @@ namespace SkillHorizon.Activation;
 
 public sealed record WaveAdmission(Guid WaveId, Guid BenchmarkVersionId, string ProfileName, int Population);
 
+public sealed record WaveListing(
+    Guid WaveId,
+    Guid BenchmarkVersionId,
+    string ProfileName,
+    int Population,
+    int AdmittedCount,
+    DateTimeOffset OpenedAt,
+    IReadOnlyList<string> SubjectIds);
+
+public sealed record ActivationCentre(int? SittingBudget, IReadOnlyList<WaveListing> Waves);
+
+public sealed record ZonePerson(string EmployeeId, string LegalEntityId, string EmploymentStatus, DateTimeOffset? JoinedAt);
+
 public sealed record AuthorizedSkill(
     Guid SkillId,
     string SkillCode,
@@ -32,6 +45,18 @@ public interface IWaveAdmission
         string zoneId,
         Guid benchmarkVersionId,
         IReadOnlyList<string> subjectIds,
+        string actorId,
+        string correlationId,
+        CancellationToken cancellationToken);
+
+    Task<ActivationCentre> ReadCentreAsync(string zoneId, CancellationToken cancellationToken);
+
+    Task<ZonePerson?> FindPersonAsync(string employeeId, CancellationToken cancellationToken);
+
+    Task<WaveAdmission> AdmitRollingAsync(
+        string zoneId,
+        Guid waveId,
+        string subjectId,
         string actorId,
         string correlationId,
         CancellationToken cancellationToken);
