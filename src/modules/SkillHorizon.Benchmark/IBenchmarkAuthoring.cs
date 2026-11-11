@@ -1,3 +1,5 @@
+using SkillHorizon.Taxonomy;
+
 namespace SkillHorizon.Benchmark;
 
 public sealed record TargetDraft(Guid SkillId, int ProficiencyRank);
@@ -80,4 +82,6 @@ public interface IReferenceLibrary
     Task<IReadOnlyList<BenchmarkVersionView>> ListAsync(CancellationToken cancellationToken);
 
     Task<IReadOnlyList<BenchmarkVersionView>> HistoryAsync(Guid jobProfileId, CancellationToken cancellationToken);
+
+    Task<TaxonomyVersionView?> ReadPublishedTaxonomyAsync(CancellationToken cancellationToken);
 }

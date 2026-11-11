@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   createCohort,
   getPacks,
+  getCatalogueReview,
   getPracticeReadiness,
   getStandards,
   sealPack,
@@ -10,6 +11,33 @@ import {
   type PracticeSnapshot,
   type Standards,
 } from "./api";
+
+function SentForReview() {
+  const [drafts, setDrafts] = useState<Awaited<ReturnType<typeof getCatalogueReview>>>([]);
+  const [problem, setProblem] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    try {
+      setDrafts(await getCatalogueReview());
+      setProblem(null);
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : "The review queue could not be loaded.");
+    }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+  return (
+    <section data-screen="lead-review">
+      <h2>Sent for review</h2>
+      <p>Only drafts L&D has sent are waiting. An unsent draft is absent.</p>
+      {problem ? <p className="gate-alert" role="alert">{problem}</p> : null}
+      {drafts.length === 0 ? <p>No draft is waiting.</p> : null}
+      <ul className="gap-list">
+        {drafts.map((draft) => (
+          <li key={draft.benchmarkVersionId}><b>{draft.profileName}</b><span>Draft version {draft.versionNumber}</span></li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 const labels: Record<string, string> = {
   aligned: "Aligned",
@@ -138,6 +166,7 @@ export function PracticePanel() {
     <section className="path" aria-labelledby="practice-title" data-screen="practice">
       <p className="eyebrow">Practice stewardship</p>
       <h1 id="practice-title">Data</h1>
+      <SentForReview />
       <p>A seal locks the published versions in this pack. The readiness figures are the stored snapshot.</p>
       {problem ? <p className="gate-alert" role="alert">{problem}</p> : null}
       <ul className="gap-list">

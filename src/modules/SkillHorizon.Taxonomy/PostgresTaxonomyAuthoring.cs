@@ -108,6 +108,17 @@ public sealed class PostgresTaxonomyAuthoring : ITaxonomyAuthoring
         return await ReadVersion(connection, null, taxonomyVersionId, cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<TaxonomyVersionView?> FindByStatusAsync(string status, CancellationToken cancellationToken)
+    {
+        await using var command = _dataSource.CreateCommand(
+            "SELECT taxonomy_version_id FROM taxonomy.version WHERE status = $1");
+        command.Parameters.AddWithValue(status);
+        var found = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        return found is Guid versionId
+            ? await FindAsync(versionId, cancellationToken).ConfigureAwait(false)
+            : null;
+    }
+
     private static List<PracticeDraft> Normalize(TaxonomyDraft draft)
     {
         if (draft.Practices.Count == 0)

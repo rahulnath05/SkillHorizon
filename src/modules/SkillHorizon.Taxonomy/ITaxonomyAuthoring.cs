@@ -55,4 +55,6 @@ public interface ITaxonomyAuthoring
     Task<TaxonomyVersionView> PublishAsync(Guid taxonomyVersionId, string subjectId, string correlationId, CancellationToken cancellationToken);
 
     Task<TaxonomyVersionView?> FindAsync(Guid taxonomyVersionId, CancellationToken cancellationToken);
+
+    Task<TaxonomyVersionView?> FindByStatusAsync(string status, CancellationToken cancellationToken);
 }
