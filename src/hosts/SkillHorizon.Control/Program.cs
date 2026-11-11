@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using Npgsql;
@@ -19,6 +20,7 @@ var registryKey = new ConfigurationSecretStore(builder.Configuration)
 builder.Services.AddSingleton(new RegistryKey(registryKey));
 builder.Services.AddSingleton(_ => NpgsqlDataSource.Create(options.ControlConnectionString));
 builder.Services.AddSingleton<ControlStore>();
+builder.Services.AddHttpClient("zones", client => client.Timeout = TimeSpan.FromSeconds(5));
 builder.Services.AddHealthChecks()
     .AddNpgSql(options.ControlConnectionString, name: "control-postgres");
 
@@ -74,7 +76,118 @@ app.MapPost("/routing/legal-entities", async (RegisterLegalEntity entity, Contro
     var created = await store.RegisterLegalEntityAsync(entity, cancellationToken).ConfigureAwait(false);
     return created ? Results.Created($"/routing/legal-entities/{entity.LegalEntityId}", entity) : Results.Conflict();
 });
+app.MapPost("/zones/{zoneId}/reference", async (string zoneId, FlagRequest? body, ControlStore store, CancellationToken cancellationToken) =>
+{
+    if (body is null || !await ZoneExists(store, zoneId, cancellationToken).ConfigureAwait(false))
+        return body is null ? Results.BadRequest() : Results.NotFound();
+
+    await store.SetReferenceSubscriptionAsync(zoneId, body.Enabled, cancellationToken).ConfigureAwait(false);
+    return Results.NoContent();
+});
+app.MapPost("/zones/{zoneId}/hr", async (string zoneId, FlagRequest? body, ControlStore store, CancellationToken cancellationToken) =>
+{
+    if (body is null || !await ZoneExists(store, zoneId, cancellationToken).ConfigureAwait(false))
+        return body is null ? Results.BadRequest() : Results.NotFound();
+
+    await store.SetHrFeedAsync(zoneId, body.Enabled, cancellationToken).ConfigureAwait(false);
+    return Results.NoContent();
+});
+app.MapGet("/zones/{zoneId}/hr", async (string zoneId, ControlStore store, CancellationToken cancellationToken) =>
+{
+    if (!await ZoneExists(store, zoneId, cancellationToken).ConfigureAwait(false))
+        return Results.NotFound();
+
+    var enabled = await store.HrFeedEnabledAsync(zoneId, cancellationToken).ConfigureAwait(false);
+    return Results.Ok(new { zoneId, enabled });
+});
+app.MapGet("/reference/subscribers", async (ControlStore store, CancellationToken cancellationToken) =>
+    Results.Ok(await store.ListReferenceSubscribersAsync(cancellationToken).ConfigureAwait(false)));
+app.MapPost("/zones/{zoneId}/activate", async (string zoneId, ControlStore store, CancellationToken cancellationToken) =>
+{
+    if (!await ZoneExists(store, zoneId, cancellationToken).ConfigureAwait(false))
+        return Results.NotFound();
+
+    var activated = await store.ActivateAsync(zoneId, cancellationToken).ConfigureAwait(false);
+    return activated
+        ? Results.NoContent()
+        : Results.Conflict(new { title = "Zone is not ready", detail = "Subscribe to reference data and turn on the HR feed before the zone becomes active." });
+});
+app.MapGet("/aggregates/practice", async (string? practice, ControlStore store, IHttpClientFactory http, RegistryKey registryKey, CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(practice))
+        return Results.BadRequest();
+
+    var zones = await store.ListZonesAsync(cancellationToken).ConfigureAwait(false);
+    var active = zones.Where(zone => zone.Status == "active").ToArray();
+    var client = http.CreateClient("zones");
+    var parts = new List<ZonePracticeCount>();
+    foreach (var zone in active)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, zone.ApiBaseUrl.TrimEnd('/') + "/aggregates/practice?practice=" + Uri.EscapeDataString(practice));
+        request.Headers.TryAddWithoutValidation(SkillHorizon.Hosting.SkillHorizonContext.RegistryKeyHeader, registryKey.Value);
+        using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+            return Results.Json(new { title = "A zone aggregate could not be read", zone = zone.ZoneId }, statusCode: StatusCodes.Status503ServiceUnavailable);
+
+        var part = await response.Content.ReadFromJsonAsync<ZonePracticeCount>(cancellationToken).ConfigureAwait(false);
+        if (part is null || !string.Equals(part.ZoneId, zone.ZoneId, StringComparison.Ordinal))
+            return Results.Json(new { title = "A zone aggregate could not be read", zone = zone.ZoneId }, statusCode: StatusCodes.Status503ServiceUnavailable);
+
+        parts.Add(part);
+    }
+
+    return Results.Ok(PracticeAggregate.Sum(practice, parts));
+});
 app.Run();
+
+static async Task<bool> ZoneExists(ControlStore store, string zoneId, CancellationToken cancellationToken)
+{
+    var zones = await store.ListZonesAsync(cancellationToken).ConfigureAwait(false);
+    return zones.Any(zone => string.Equals(zone.ZoneId, zoneId, StringComparison.Ordinal));
+}
+
+internal sealed record FlagRequest(bool Enabled);
+
+public sealed record ZonePracticeCount(
+    string ZoneId,
+    string PracticeCode,
+    int MemberCount,
+    int MeasuredCount,
+    int GapCount,
+    int CohortCount,
+    DateTimeOffset? AsOf);
+
+public sealed record PracticeAggregateResult(
+    string PracticeCode,
+    int MemberCount,
+    int MeasuredCount,
+    int GapCount,
+    int CohortCount,
+    DateTimeOffset? AsOf,
+    IReadOnlyList<ZonePracticeCount> Zones);
+
+public static class PracticeAggregate
+{
+    public static PracticeAggregateResult Sum(string practiceCode, IReadOnlyList<ZonePracticeCount> zones)
+    {
+        DateTimeOffset? asOf = null;
+        var members = 0;
+        var measured = 0;
+        var gaps = 0;
+        var cohorts = 0;
+        foreach (var zone in zones)
+        {
+            members += zone.MemberCount;
+            measured += zone.MeasuredCount;
+            gaps += zone.GapCount;
+            cohorts += zone.CohortCount;
+            if (zone.AsOf is DateTimeOffset at && (asOf is null || at < asOf))
+                asOf = at;
+        }
+
+        return new PracticeAggregateResult(practiceCode, members, measured, gaps, cohorts, asOf, zones);
+    }
+}
 
 public partial class Program;
 

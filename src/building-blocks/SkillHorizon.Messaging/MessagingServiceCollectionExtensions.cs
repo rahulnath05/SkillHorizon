@@ -20,6 +20,7 @@ public static class MessagingServiceCollectionExtensions
         services.AddSingleton<IMessageBus, RedisMessageBus>();
         services.AddSingleton<IOutbox, PostgresOutbox>();
         services.AddSingleton<IOutboxPublisher, PostgresOutboxPublisher>();
+        services.AddSingleton<ReferenceDistributor>();
         return services;
     }
 }

@@ -16,6 +16,7 @@ public static class ModuleRegistration
     public static IServiceCollection AddSkillHorizonModules(this IServiceCollection services)
     {
         return services
+            .AddSingleton<IHrPlacement, RegistryHrPlacement>()
             .AddWorkforceModule()
             .AddAccessModule()
             .AddTaxonomyModule()

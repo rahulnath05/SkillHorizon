@@ -75,6 +75,8 @@ public interface IReferenceLibrary
 {
     Task<int> ApplyPendingAsync(CancellationToken cancellationToken);
 
+    Task ApplyPublicationAsync(Guid messageId, string messageType, string payload, CancellationToken cancellationToken);
+
     Task<IReadOnlyList<BenchmarkVersionView>> ListAsync(CancellationToken cancellationToken);
 
     Task<IReadOnlyList<BenchmarkVersionView>> HistoryAsync(Guid jobProfileId, CancellationToken cancellationToken);

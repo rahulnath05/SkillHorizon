@@ -57,6 +57,40 @@ public sealed class PostgresReferenceLibrary : IReferenceLibrary
         return pending.Count;
     }
 
+    public async Task ApplyPublicationAsync(Guid messageId, string messageType, string payload, CancellationToken cancellationToken)
+    {
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using (var existing = new NpgsqlCommand(
+            "SELECT 1 FROM reference.applied_message WHERE outbox_id = $1",
+            connection,
+            transaction))
+        {
+            existing.Parameters.AddWithValue(messageId);
+            if (await existing.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) is not null)
+            {
+                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                return;
+            }
+        }
+
+        if (messageType == TaxonomyModule.PublishedMessage)
+            await CopyTaxonomy(connection, transaction, payload, cancellationToken).ConfigureAwait(false);
+        else if (messageType == BenchmarkModule.PublishedMessage)
+            await CopyBenchmark(connection, transaction, payload, cancellationToken).ConfigureAwait(false);
+
+        await using (var applied = new NpgsqlCommand(
+            "INSERT INTO reference.applied_message (outbox_id, applied_at) VALUES ($1, now())",
+            connection,
+            transaction))
+        {
+            applied.Parameters.AddWithValue(messageId);
+            await applied.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     public Task<IReadOnlyList<BenchmarkVersionView>> ListAsync(CancellationToken cancellationToken) =>
         ReadHistory("TRUE", null, cancellationToken);
 

@@ -11,6 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\SkillHorizon.Hosting\SkillHorizon.Hosting.csproj" />
     <ProjectReference Include="..\..\modules\SkillHorizon.Workforce\SkillHorizon.Workforce.csproj" />
     <ProjectReference Include="..\..\modules\SkillHorizon.Access\SkillHorizon.Access.csproj" />
     <ProjectReference Include="..\..\modules\SkillHorizon.Taxonomy\SkillHorizon.Taxonomy.csproj" />

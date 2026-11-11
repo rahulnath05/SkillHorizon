@@ -1,0 +1,131 @@
+# One residency zone. This is the same shape as the first zone in the
+# installation compose file: web, core API, learning, worker, three
+# PostgreSQL databases, Redis, object storage, and the queue.
+# The control registry is not part of a zone. Point CONTROL_REGISTRY_URL
+# at the installation's control service.
+#
+#   ZONE_ID=north ZONE_WEB_PORT=8180 ZONE_API_PORT=8181 \
+#   ZONE_WORKER_PORT=8183 ZONE_LEARNING_PORT=8184 ZONE_REDIS_PORT=6380 \
+#   docker compose -f deploy/zone/compose.yaml up --build
+
+name: skillhorizon-${ZONE_ID:?ZONE_ID is required}
+
+x-app: &app
+  image: skillhorizon:local
+  build:
+    context: ../..
+    dockerfile: deploy/docker/Dockerfile
+  environment: &runtime
+    ASPNETCORE_ENVIRONMENT: Production
+    ASPNETCORE_URLS: http://+:8080
+    SkillHorizon__EnableConsoleExporter: "true"
+    SkillHorizon__MigrateOnStartup: "true"
+    SkillHorizon__ZoneId: ${ZONE_ID}
+    SKILLHORIZON_SECRET_LOCAL_SIGNING_KEY: ${SKILLHORIZON_SECRET_LOCAL_SIGNING_KEY:-local-signing-key-must-be-at-least-32b}
+    SKILLHORIZON_SECRET_REGISTRY_KEY: ${SKILLHORIZON_SECRET_REGISTRY_KEY:-local-registry-key}
+    SKILLHORIZON_SECRET_LEARNING_SERVICE_KEY: ${SKILLHORIZON_SECRET_LEARNING_SERVICE_KEY:-local-learning-key}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: skillhorizon
+      POSTGRES_PASSWORD: skillhorizon
+      POSTGRES_DB: skillhorizon_${ZONE_ID}_domain
+      ZONE_ID: ${ZONE_ID}
+    volumes:
+      - zone-pg:/var/lib/postgresql/data
+      - ./init-databases.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U skillhorizon -d skillhorizon_${ZONE_ID}_domain"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${ZONE_REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    <<: *app
+    working_dir: /app/api
+    command: ["dotnet", "SkillHorizon.Api.dll"]
+    environment:
+      <<: *runtime
+      SkillHorizon__DomainConnectionString: Host=postgres;Port=5432;Database=skillhorizon_${ZONE_ID}_domain;Username=skillhorizon;Password=skillhorizon
+      SkillHorizon__Redis: redis:6379
+      SkillHorizon__ControlRegistryUrl: ${CONTROL_REGISTRY_URL:-http://host.docker.internal:8082}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${ZONE_API_PORT:-8081}:8080"
+
+  worker:
+    <<: *app
+    working_dir: /app/worker
+    command: ["dotnet", "SkillHorizon.Worker.dll"]
+    environment:
+      <<: *runtime
+      SkillHorizon__DomainConnectionString: Host=postgres;Port=5432;Database=skillhorizon_${ZONE_ID}_domain;Username=skillhorizon;Password=skillhorizon
+      SkillHorizon__Redis: redis:6379
+      SkillHorizon__ControlRegistryUrl: ${CONTROL_REGISTRY_URL:-http://host.docker.internal:8082}
+      SkillHorizon__PublishOutbox: "true"
+      SkillHorizon__ReceiveReference: "true"
+      SkillHorizon__FanoutReference: "false"
+      SkillHorizon__SyncWorkforceOnStartup: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${ZONE_WORKER_PORT:-8083}:8080"
+
+  learning:
+    <<: *app
+    working_dir: /app/learning
+    command: ["dotnet", "SkillHorizon.Learning.dll"]
+    environment:
+      <<: *runtime
+      SkillHorizon__ApiUrl: http://api:8080
+      SkillHorizon__AssessmentConnectionString: Host=postgres;Port=5432;Database=skillhorizon_${ZONE_ID}_assessment;Username=skillhorizon;Password=skillhorizon
+      SkillHorizon__ProgressConnectionString: Host=postgres;Port=5432;Database=skillhorizon_${ZONE_ID}_progress;Username=skillhorizon;Password=skillhorizon
+      SkillHorizon__EvidenceRoot: /var/skillhorizon/objects
+    volumes:
+      - objects:/var/skillhorizon/objects
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_started
+    ports:
+      - "${ZONE_LEARNING_PORT:-8084}:8080"
+
+  web:
+    <<: *app
+    working_dir: /app/web
+    command: ["dotnet", "SkillHorizon.Web.dll"]
+    environment:
+      <<: *runtime
+      SkillHorizon__ApiUrl: http://api:8080
+      SkillHorizon__LearningUrl: http://learning:8080
+    depends_on:
+      api:
+        condition: service_started
+      learning:
+        condition: service_started
+    ports:
+      - "${ZONE_WEB_PORT:-8080}:8080"
+
+volumes:
+  zone-pg:
+  objects:
