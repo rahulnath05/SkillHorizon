@@ -4,7 +4,7 @@ import { chooseWorkspace, signIn, signOut, useShell } from "./api";
 import { activeWorkspaceCode, resolveDestination, type ShellState } from "./shell";
 import { Gate, Loading, Platform, useTitle } from "./ui";
 import { EmployeeHome } from "./home";
-import { PracticePanel } from "./practice";
+import { PracticeHome } from "./practice";
 import { ManagerHome } from "./manager";
 import { CatalogueHome } from "./catalogue";
 import { initials, workspaceCopy } from "./workspaces";
@@ -234,27 +234,19 @@ export function WorkspacePage() {
   if (!shell || !code || destinationFor(shell) !== "/workspace") return <Loading label="Loading SkillHorizon…" />;
 
   const copy = workspaceCopy(code);
-  const team = code === "people_manager";
-  const authoring = code === "learning_and_development";
-  const practice = code === "competency_lead";
-  const wide = team || authoring || practice;
   return (
     <Platform shell={shell}>
       <main className="workspace" id="main" data-screen="workspace" data-workspace={code}>
         {code === "employee" ? <EmployeeHome /> : null}
         {code === "people_manager" ? <ManagerHome /> : null}
         {code === "learning_and_development" ? <CatalogueHome /> : null}
-        {code === "employee" || code === "people_manager" || code === "learning_and_development" ? null : (
-        <div className={wide ? "workspace-in team-in" : "workspace-in"}>
-          {practice ? <PracticePanel /> : null}
-          {!practice ? (
-            <>
-              <p className="eyebrow">Active workspace</p>
-              <h1>{copy.label}</h1>
-              <p>{copy.detail}</p>
-              <p>This shell is empty. The workspace opens here when its features are built.</p>
-            </>
-          ) : null}
+        {code === "competency_lead" ? <PracticeHome /> : null}
+        {code === "employee" || code === "people_manager" || code === "learning_and_development" || code === "competency_lead" ? null : (
+        <div className="workspace-in">
+          <p className="eyebrow">Active workspace</p>
+          <h1>{copy.label}</h1>
+          <p>{copy.detail}</p>
+          <p>This shell is empty. The workspace opens here when its features are built.</p>
           {shell.workspaces.length > 1 ? (
             <p><Link to="/entry">Choose a different workspace</Link></p>
           ) : null}

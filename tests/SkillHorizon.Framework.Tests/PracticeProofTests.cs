@@ -96,6 +96,23 @@ public sealed class PracticeProofTests
             practiceCode = Code("practice")
         });
         Assert.Equal(HttpStatusCode.NoContent, scope.StatusCode);
+        var exceptionRowId = JsonSerializer.Deserialize<JsonElement>(submittedBody)
+            .GetProperty("rows")
+            .EnumerateArray()
+            .Single(row => row.GetProperty("classification").GetString() == "tightening")
+            .GetProperty("rowId")
+            .GetGuid();
+        var undecided = await Send(api, HttpMethod.Post, $"/commands/packs/{packId}/seal", "person-lead", "competency_lead", new { });
+        var undecidedBody = await undecided.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.BadRequest, undecided.StatusCode);
+        Assert.Contains("decision", undecidedBody, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, await DomainCount("SELECT count(*) FROM attestation.baseline WHERE practice_code = $1", Code("practice")));
+        var decided = await Send(api, HttpMethod.Post, $"/commands/packs/{packId}/decisions", "person-lead", "competency_lead", new
+        {
+            rowId = exceptionRowId,
+            decision = "Keep the tighter bar"
+        });
+        Assert.Equal(HttpStatusCode.OK, decided.StatusCode);
         var sealedPack = await Send(api, HttpMethod.Post, $"/commands/packs/{packId}/seal", "person-lead", "competency_lead", new { });
         var sealedBody = await sealedPack.Content.ReadAsStringAsync();
         Assert.Equal(HttpStatusCode.OK, sealedPack.StatusCode);

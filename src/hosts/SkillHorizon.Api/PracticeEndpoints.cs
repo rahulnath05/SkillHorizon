@@ -1,3 +1,4 @@
+using Npgsql;
 using SkillHorizon.Access;
 using SkillHorizon.Attestation;
 using SkillHorizon.Hosting;
@@ -11,8 +12,13 @@ public static class PracticeEndpoints
     {
         app.MapPost("/commands/practice-scope", GrantScope);
         app.MapPost("/commands/packs/submit", SubmitPack);
+        app.MapPost("/commands/packs/{packId:guid}/reviews", MarkReviewed);
+        app.MapPost("/commands/packs/{packId:guid}/decisions", DecideException);
         app.MapPost("/commands/packs/{packId:guid}/seal", SealPack);
         app.MapGet("/packs", ListPacks);
+        app.MapGet("/practice/briefing", Briefing);
+        app.MapGet("/practice/requests", Requests);
+        app.MapPost("/practice/requests/{requestId:guid}/accept", AcceptRequest);
         app.MapPost("/commands/cohorts/limit", SetLimit);
         app.MapPost("/commands/cohorts", CreateCohort);
         app.MapGet("/practice/readiness", ReadSnapshot);
@@ -36,6 +42,38 @@ public static class PracticeEndpoints
             return Results.Ok(pack);
         });
 
+    private static async Task<IResult> MarkReviewed(Guid packId, HttpContext context, IGrantCheck grants, IAttestationPacks packs, ReviewRequest? body, CancellationToken cancellationToken)
+    {
+        var refused = await Refuse(context, grants, Workspaces.CompetencyLead, cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        try
+        {
+            var pack = await packs.MarkReviewedAsync(Subject(context), Correlation(context), packId, body?.RowIds ?? [], cancellationToken).ConfigureAwait(false);
+            return Results.Ok(pack);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Problem("Review refused", exception);
+        }
+    }
+
+    private static async Task<IResult> DecideException(Guid packId, HttpContext context, IGrantCheck grants, IAttestationPacks packs, DecisionRequest? body, CancellationToken cancellationToken)
+    {
+        var refused = await Refuse(context, grants, Workspaces.CompetencyLead, cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        try
+        {
+            var pack = await packs.DecideAsync(Subject(context), Correlation(context), packId, body?.RowId ?? Guid.Empty, body?.Decision ?? "", cancellationToken).ConfigureAwait(false);
+            return Results.Ok(pack);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Problem("Decision refused", exception);
+        }
+    }
+
     private static async Task<IResult> SealPack(Guid packId, HttpContext context, IGrantCheck grants, IAttestationPacks packs, CancellationToken cancellationToken)
     {
         var refused = await Refuse(context, grants, Workspaces.CompetencyLead, cancellationToken).ConfigureAwait(false);
@@ -47,10 +85,67 @@ public static class PracticeEndpoints
         }
         catch (InvalidOperationException exception)
         {
-            var status = exception.Message.Contains("scope", StringComparison.Ordinal)
-                ? StatusCodes.Status403Forbidden
-                : StatusCodes.Status400BadRequest;
-            return Results.Problem(title: "Seal refused", detail: exception.Message, statusCode: status);
+            return Problem("Seal refused", exception);
+        }
+    }
+
+    private static async Task<IResult> Briefing(
+        HttpContext context,
+        IGrantCheck grants,
+        IAttestationPacks packs,
+        IPracticeScope scope,
+        IPracticeProjection projection,
+        NpgsqlDataSource dataSource,
+        CancellationToken cancellationToken)
+    {
+        var refused = await Refuse(context, grants, Workspaces.CompetencyLead, cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        var practice = context.Request.Query["practice"].ToString();
+        if (!await scope.HoldsAsync(Subject(context), practice, cancellationToken).ConfigureAwait(false))
+            return Results.Problem(title: "Scope required", detail: "That practice is outside this lead's scope.", statusCode: StatusCodes.Status403Forbidden);
+        var listed = await packs.ListAsync(practice, cancellationToken).ConfigureAwait(false);
+        var open = listed.FirstOrDefault(pack => pack.Status == "submitted") ?? listed.FirstOrDefault();
+        var requests = await new PracticeReviewStore(dataSource).ListAsync(practice, cancellationToken).ConfigureAwait(false);
+        var snapshot = await projection.ReadAsync(practice, cancellationToken).ConfigureAwait(false);
+        return Results.Ok(new { practiceCode = practice, pack = open, requests, snapshot });
+    }
+
+    private static async Task<IResult> Requests(HttpContext context, IGrantCheck grants, IPracticeScope scope, NpgsqlDataSource dataSource, CancellationToken cancellationToken)
+    {
+        var refused = await Refuse(context, grants, Workspaces.CompetencyLead, cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        var practice = context.Request.Query["practice"].ToString();
+        if (!await scope.HoldsAsync(Subject(context), practice, cancellationToken).ConfigureAwait(false))
+            return Results.Problem(title: "Scope required", detail: "That practice is outside this lead's scope.", statusCode: StatusCodes.Status403Forbidden);
+        var requests = await new PracticeReviewStore(dataSource).ListAsync(practice, cancellationToken).ConfigureAwait(false);
+        return Results.Ok(new { requests });
+    }
+
+    private static async Task<IResult> AcceptRequest(
+        Guid requestId,
+        HttpContext context,
+        IGrantCheck grants,
+        IPracticeScope scope,
+        NpgsqlDataSource dataSource,
+        AcceptRequestBody? body,
+        CancellationToken cancellationToken)
+    {
+        var refused = await Refuse(context, grants, Workspaces.CompetencyLead, cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        var practice = body?.PracticeCode?.Trim() ?? "";
+        if (!await scope.HoldsAsync(Subject(context), practice, cancellationToken).ConfigureAwait(false))
+            return Results.Problem(title: "Scope required", detail: "That practice is outside this lead's scope.", statusCode: StatusCodes.Status403Forbidden);
+        try
+        {
+            var request = await new PracticeReviewStore(dataSource).AcceptAsync(Subject(context), practice, requestId, cancellationToken).ConfigureAwait(false);
+            return Results.Ok(request);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Problem("Request refused", exception);
         }
     }
 
@@ -101,11 +196,16 @@ public static class PracticeEndpoints
         }
         catch (InvalidOperationException exception)
         {
-            var status = exception.Message.Contains("scope", StringComparison.Ordinal)
-                ? StatusCodes.Status403Forbidden
-                : StatusCodes.Status400BadRequest;
-            return Results.Problem(title: "Cohort refused", detail: exception.Message, statusCode: status);
+            return Problem("Cohort refused", exception);
         }
+    }
+
+    private static IResult Problem(string title, InvalidOperationException exception)
+    {
+        var status = exception.Message.Contains("scope", StringComparison.Ordinal)
+            ? StatusCodes.Status403Forbidden
+            : StatusCodes.Status400BadRequest;
+        return Results.Problem(title: title, detail: exception.Message, statusCode: status);
     }
 
     private static async Task<IResult> ReadSnapshot(HttpContext context, IGrantCheck grants, IPracticeScope scope, IPracticeProjection projection, CancellationToken cancellationToken)
@@ -158,4 +258,10 @@ public static class PracticeEndpoints
     private sealed record LimitRequest(int Maximum);
 
     private sealed record CohortRequest(string? PracticeCode, string? CountryCode, string? OrgUnit, Guid JobProfileId, string[]? MemberIds);
+
+    private sealed record ReviewRequest(Guid[]? RowIds);
+
+    private sealed record DecisionRequest(Guid RowId, string? Decision);
+
+    private sealed record AcceptRequestBody(string? PracticeCode);
 }

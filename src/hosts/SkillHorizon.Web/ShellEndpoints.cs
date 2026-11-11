@@ -61,7 +61,12 @@ public static class ShellEndpoints
         app.MapGet("/api/catalogue/overview", (Delegate)CatalogueOverview);
         app.MapPost("/api/packs", (Delegate)SubmitPack);
         app.MapGet("/api/packs", (Delegate)ListPacks);
+        app.MapPost("/api/packs/{packId:guid}/reviews", (Delegate)MarkReviewed);
+        app.MapPost("/api/packs/{packId:guid}/decisions", (Delegate)DecideException);
         app.MapPost("/api/packs/{packId:guid}/seal", (Delegate)SealPack);
+        app.MapGet("/api/practice/briefing", (Delegate)PracticeBriefing);
+        app.MapGet("/api/practice/requests", (Delegate)PracticeRequests);
+        app.MapPost("/api/practice/requests/{requestId:guid}/accept", (Delegate)AcceptPracticeRequest);
         app.MapPost("/api/cohorts", (Delegate)CreateCohort);
         app.MapGet("/api/practice/readiness", (Delegate)PracticeReadiness);
         app.MapGet("/signin/oidc", (Delegate)Oidc);
@@ -706,6 +711,22 @@ public static class ShellEndpoints
         return await Proxy(http, HttpMethod.Get, path, null).ConfigureAwait(false);
     }
 
+    private static async Task<IResult> MarkReviewed(HttpContext http, Guid packId)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var body = await ReadBody(http).ConfigureAwait(false);
+        return await Proxy(http, HttpMethod.Post, $"commands/packs/{packId}/reviews", body).ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> DecideException(HttpContext http, Guid packId)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var body = await ReadBody(http).ConfigureAwait(false);
+        return await Proxy(http, HttpMethod.Post, $"commands/packs/{packId}/decisions", body).ConfigureAwait(false);
+    }
+
     private static async Task<IResult> SealPack(HttpContext http, Guid packId)
     {
         if (!await IsValidForm(http).ConfigureAwait(false))
@@ -719,6 +740,26 @@ public static class ShellEndpoints
             return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
         var body = await ReadBody(http).ConfigureAwait(false);
         return await Proxy(http, HttpMethod.Post, "commands/cohorts", body).ConfigureAwait(false);
+    }
+
+    private static Task<IResult> PracticeBriefing(HttpContext http)
+    {
+        var practice = Uri.EscapeDataString(http.Request.Query["practice"].ToString());
+        return Proxy(http, HttpMethod.Get, "practice/briefing?practice=" + practice, null);
+    }
+
+    private static Task<IResult> PracticeRequests(HttpContext http)
+    {
+        var practice = Uri.EscapeDataString(http.Request.Query["practice"].ToString());
+        return Proxy(http, HttpMethod.Get, "practice/requests?practice=" + practice, null);
+    }
+
+    private static async Task<IResult> AcceptPracticeRequest(HttpContext http, Guid requestId)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var body = await ReadBody(http).ConfigureAwait(false);
+        return await Proxy(http, HttpMethod.Post, $"practice/requests/{requestId}/accept", body).ConfigureAwait(false);
     }
 
     private static Task<IResult> PracticeReadiness(HttpContext http)
