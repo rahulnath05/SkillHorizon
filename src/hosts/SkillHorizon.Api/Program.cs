@@ -38,6 +38,7 @@ app.MapHealthChecks("/health");
 app.MapWorkforce();
 app.MapManager();
 app.MapStandards();
+app.MapCatalogue();
 app.MapLearning();
 app.MapPractice();
 app.MapAggregates();

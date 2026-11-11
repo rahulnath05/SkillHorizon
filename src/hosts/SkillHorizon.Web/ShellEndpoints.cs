@@ -50,6 +50,15 @@ public static class ShellEndpoints
         app.MapPost("/api/validations", (Delegate)ValidateStep);
         app.MapPost("/api/benchmarks/draft", (Delegate)SaveBenchmark);
         app.MapPost("/api/benchmarks/publish", (Delegate)PublishBenchmark);
+        app.MapGet("/api/catalogue/taxonomy", (Delegate)CatalogueTaxonomy);
+        app.MapPost("/api/catalogue/taxonomy/draft", (Delegate)SaveTaxonomy);
+        app.MapGet("/api/catalogue/benchmark", (Delegate)CatalogueBenchmark);
+        app.MapGet("/api/catalogue/requests", (Delegate)CatalogueRequests);
+        app.MapPost("/api/catalogue/requests/{requestId:guid}/open", (Delegate)OpenProfileRequest);
+        app.MapGet("/api/catalogue/approvals", (Delegate)CatalogueApprovals);
+        app.MapPost("/api/catalogue/submissions", (Delegate)SendDraft);
+        app.MapGet("/api/catalogue/review", (Delegate)CatalogueReview);
+        app.MapGet("/api/catalogue/overview", (Delegate)CatalogueOverview);
         app.MapPost("/api/packs", (Delegate)SubmitPack);
         app.MapGet("/api/packs", (Delegate)ListPacks);
         app.MapPost("/api/packs/{packId:guid}/seal", (Delegate)SealPack);
@@ -203,6 +212,48 @@ public static class ShellEndpoints
 
     private static Task<IResult> Standards(HttpContext http) =>
         Proxy(http, HttpMethod.Get, "standards", null);
+
+    private static Task<IResult> CatalogueTaxonomy(HttpContext http) =>
+        Proxy(http, HttpMethod.Get, "catalogue/taxonomy", null);
+
+    private static async Task<IResult> SaveTaxonomy(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var body = await ReadBody(http).ConfigureAwait(false);
+        return await Proxy(http, HttpMethod.Post, "commands/taxonomy/draft", body).ConfigureAwait(false);
+    }
+
+    private static Task<IResult> CatalogueBenchmark(HttpContext http) =>
+        Proxy(http, HttpMethod.Get, "catalogue/benchmark" + http.Request.QueryString.Value, null);
+
+    private static Task<IResult> CatalogueRequests(HttpContext http) =>
+        Proxy(http, HttpMethod.Get, "catalogue/requests", null);
+
+    private static async Task<IResult> OpenProfileRequest(HttpContext http, Guid requestId)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var body = await ReadBody(http).ConfigureAwait(false);
+        return await Proxy(http, HttpMethod.Post, $"catalogue/requests/{requestId}/open", body).ConfigureAwait(false);
+    }
+
+    private static Task<IResult> CatalogueApprovals(HttpContext http) =>
+        Proxy(http, HttpMethod.Get, "catalogue/approvals", null);
+
+    private static async Task<IResult> SendDraft(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var body = await ReadBody(http).ConfigureAwait(false);
+        return await Proxy(http, HttpMethod.Post, "catalogue/submissions", body).ConfigureAwait(false);
+    }
+
+    private static Task<IResult> CatalogueReview(HttpContext http) =>
+        Proxy(http, HttpMethod.Get, "catalogue/review", null);
+
+    private static Task<IResult> CatalogueOverview(HttpContext http) =>
+        Proxy(http, HttpMethod.Get, "catalogue/overview", null);
 
     private static async Task<IResult> SaveBenchmark(HttpContext http)
     {

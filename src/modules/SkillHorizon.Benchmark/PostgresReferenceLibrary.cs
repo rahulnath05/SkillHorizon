@@ -94,6 +94,72 @@ public sealed class PostgresReferenceLibrary : IReferenceLibrary
     public Task<IReadOnlyList<BenchmarkVersionView>> ListAsync(CancellationToken cancellationToken) =>
         ReadHistory("TRUE", null, cancellationToken);
 
+    public async Task<TaxonomyVersionView?> ReadPublishedTaxonomyAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        Guid versionId;
+        int versionNumber;
+        await using (var header = new NpgsqlCommand(
+            """
+            SELECT taxonomy_version_id, version_number
+            FROM reference.taxonomy_version
+            WHERE status = 'published'
+            ORDER BY version_number DESC
+            LIMIT 1
+            """,
+            connection))
+        await using (var reader = await header.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+        {
+            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                return null;
+            versionId = reader.GetGuid(0);
+            versionNumber = reader.GetInt32(1);
+        }
+
+        var skills = new List<TaxonomySkillView>();
+        await using (var command = new NpgsqlCommand(
+            """
+            SELECT skill_id, skill_code, skill_name, competency_code, competency_name, practice_code, practice_name
+            FROM reference.taxonomy_skill
+            WHERE taxonomy_version_id = $1
+            ORDER BY practice_name, competency_name, skill_name
+            """,
+            connection))
+        {
+            command.Parameters.AddWithValue(versionId);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                skills.Add(new TaxonomySkillView(
+                    reader.GetGuid(0),
+                    reader.GetString(1),
+                    reader.GetString(2),
+                    reader.GetString(3),
+                    reader.GetString(4),
+                    reader.GetString(5),
+                    reader.GetString(6)));
+            }
+        }
+
+        var proficiencies = new List<ProficiencyView>();
+        await using (var command = new NpgsqlCommand(
+            """
+            SELECT code, display_name, rank
+            FROM reference.proficiency
+            WHERE taxonomy_version_id = $1
+            ORDER BY rank
+            """,
+            connection))
+        {
+            command.Parameters.AddWithValue(versionId);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                proficiencies.Add(new ProficiencyView(reader.GetString(0), reader.GetString(1), reader.GetInt32(2)));
+        }
+
+        return new TaxonomyVersionView(versionId, versionNumber, "published", skills, proficiencies);
+    }
+
     public Task<IReadOnlyList<BenchmarkVersionView>> HistoryAsync(Guid jobProfileId, CancellationToken cancellationToken) =>
         ReadHistory("job_profile_id = $1", jobProfileId, cancellationToken);
 

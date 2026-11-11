@@ -4,9 +4,9 @@ import { chooseWorkspace, signIn, signOut, useShell } from "./api";
 import { activeWorkspaceCode, resolveDestination, type ShellState } from "./shell";
 import { Gate, Loading, Platform, useTitle } from "./ui";
 import { EmployeeHome } from "./home";
-import { PackSubmission, PracticePanel } from "./practice";
-import { StandardsAuthoring } from "./standards";
+import { PracticePanel } from "./practice";
 import { ManagerHome } from "./manager";
+import { CatalogueHome } from "./catalogue";
 import { initials, workspaceCopy } from "./workspaces";
 
 const signInLede = "Skills intelligence for the whole firm. Choose the account you want to sign in with. This chooses who you are. It does not choose a workspace.";
@@ -243,12 +243,11 @@ export function WorkspacePage() {
       <main className="workspace" id="main" data-screen="workspace" data-workspace={code}>
         {code === "employee" ? <EmployeeHome /> : null}
         {code === "people_manager" ? <ManagerHome /> : null}
-        {code === "employee" || code === "people_manager" ? null : (
+        {code === "learning_and_development" ? <CatalogueHome /> : null}
+        {code === "employee" || code === "people_manager" || code === "learning_and_development" ? null : (
         <div className={wide ? "workspace-in team-in" : "workspace-in"}>
-          {authoring ? <StandardsAuthoring /> : null}
-          {authoring ? <PackSubmission /> : null}
           {practice ? <PracticePanel /> : null}
-          {!authoring && !practice ? (
+          {!practice ? (
             <>
               <p className="eyebrow">Active workspace</p>
               <h1>{copy.label}</h1>

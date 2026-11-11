@@ -517,6 +517,112 @@ export async function validateStep(body: { subjectId: string; stepId: string }):
   if (!response.ok) throw new Error(await readError(response));
 }
 
+export type CatalogueSkill = { code: string; name: string };
+
+export type CatalogueCompetency = {
+  code: string;
+  name: string;
+  practiceCode: string;
+  practiceName: string;
+  skills: CatalogueSkill[];
+};
+
+export type CatalogueTaxonomy = {
+  source: "authoring" | "reference";
+  version: {
+    taxonomyVersionId: string;
+    versionNumber: number;
+    status: string;
+    competencies: CatalogueCompetency[];
+    proficiencies: Proficiency[];
+  } | null;
+};
+
+export type CatalogueBenchmark = {
+  profile: { profileId: string; profileName: string; frameworkName: string; levelName: string };
+  taxonomyVersionId: string;
+  benchmarkVersionId: string | null;
+  versionNumber: number | null;
+  proficiencies: Proficiency[];
+  skills: { skillId: string; skillName: string; competencyName: string; practiceName: string; proficiencyRank: number }[];
+};
+
+export type ProfileRequest = {
+  requestId: string;
+  managerEmployeeId: string;
+  reportEmployeeId: string;
+  displayName: string;
+  note: string;
+  recordedAt: string;
+  profileId: string | null;
+  profileName: string | null;
+};
+
+export type SentDraft = {
+  benchmarkVersionId: string;
+  jobProfileId: string;
+  profileName: string;
+  versionNumber: number;
+  sentAt: string;
+};
+
+export type CatalogueOverview = {
+  snapshots: { practiceCode: string; asOf: string; memberCount: number; measuredCount: number; gapCount: number; cohortCount: number }[];
+  requestCount: number;
+  approvalCount: number;
+};
+
+async function readOk<T>(path: string): Promise<T> {
+  const response = await fetch(path, { headers: { Accept: "application/json" }, cache: "no-store" });
+  if (!response.ok) throw new Error(await readError(response));
+  return (await response.json()) as T;
+}
+
+export function getCatalogueTaxonomy(): Promise<CatalogueTaxonomy> {
+  return readOk("/api/catalogue/taxonomy");
+}
+
+export function saveTaxonomyDraft(body: {
+  practices: { code: string; name: string; competencies: { code: string; name: string; skills: { code: string; name: string }[] }[] }[];
+  proficiencies: { code: string; name: string; rank: number }[];
+}): Promise<void> {
+  return postJson("/api/catalogue/taxonomy/draft", body).then(async (response) => {
+    if (!response.ok) throw new Error(await readError(response));
+  });
+}
+
+export function getCatalogueBenchmark(profileId: string): Promise<CatalogueBenchmark> {
+  return readOk(`/api/catalogue/benchmark?profileId=${encodeURIComponent(profileId)}`);
+}
+
+export function getProfileRequests(): Promise<ProfileRequest[]> {
+  return readOk<{ requests?: ProfileRequest[] }>("/api/catalogue/requests").then((body) => body.requests ?? []);
+}
+
+export function openProfileRequest(requestId: string, body: { profileName: string; frameworkCode: string; levelCode: string }): Promise<void> {
+  return postJson(`/api/catalogue/requests/${requestId}/open`, body).then(async (response) => {
+    if (!response.ok) throw new Error(await readError(response));
+  });
+}
+
+export function getApprovals(): Promise<SentDraft[]> {
+  return readOk<{ drafts?: SentDraft[] }>("/api/catalogue/approvals").then((body) => body.drafts ?? []);
+}
+
+export function sendDraft(benchmarkVersionId: string): Promise<void> {
+  return postJson("/api/catalogue/submissions", { benchmarkVersionId }).then(async (response) => {
+    if (!response.ok) throw new Error(await readError(response));
+  });
+}
+
+export function getCatalogueReview(): Promise<SentDraft[]> {
+  return readOk<{ drafts?: SentDraft[] }>("/api/catalogue/review").then((body) => body.drafts ?? []);
+}
+
+export function getCatalogueOverview(): Promise<CatalogueOverview> {
+  return readOk("/api/catalogue/overview");
+}
+
 export async function publishBenchmark(benchmarkVersionId: string): Promise<void> {
   const response = await postJson("/api/benchmarks/publish", { benchmarkVersionId });
   if (!response.ok) throw new Error(await readError(response));
