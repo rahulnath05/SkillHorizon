@@ -22,6 +22,8 @@ public sealed class SkillHorizonOptions
 
     public string ProgressConnectionString { get; set; } = "";
 
+    public string EvidenceRoot { get; set; } = "";
+
     public string LearningServiceKeySecretName { get; set; } = "learning-service-key";
 
     public int ZoneSittingBudget { get; set; } = 25000;

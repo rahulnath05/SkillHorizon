@@ -27,6 +27,11 @@ public static class ShellEndpoints
         app.MapPost("/api/sittings/answer", (Delegate)AnswerSitting);
         app.MapPost("/api/sittings/seal", (Delegate)SealSitting);
         app.MapPost("/api/progress/steps", (Delegate)AssignStep);
+        app.MapPost("/api/paths", (Delegate)OpenPath);
+        app.MapGet("/api/path", (Delegate)ReadPath);
+        app.MapPost("/api/paths/evidence", (Delegate)AddEvidence);
+        app.MapGet("/api/team/paths", (Delegate)TeamPaths);
+        app.MapPost("/api/validations", (Delegate)ValidateStep);
         app.MapPost("/api/benchmarks/draft", (Delegate)SaveBenchmark);
         app.MapPost("/api/benchmarks/publish", (Delegate)PublishBenchmark);
         app.MapGet("/signin/oidc", (Delegate)Oidc);
@@ -248,6 +253,73 @@ public static class ShellEndpoints
         if (refused is not null)
             return refused;
         return await ForwardSitting(http, "seal").ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> OpenPath(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var refused = await EmployeeContext(http).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        var session = await Session(http).ConfigureAwait(false);
+        return await LearningUser(http, HttpMethod.Post, "paths", session!.Value.Bearer, "employee", "{}").ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> ReadPath(HttpContext http)
+    {
+        var refused = await EmployeeContext(http).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        var session = await Session(http).ConfigureAwait(false);
+        return await LearningUser(http, HttpMethod.Get, "paths/current", session!.Value.Bearer, "employee", null).ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> AddEvidence(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var refused = await EmployeeContext(http).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        var session = await Session(http).ConfigureAwait(false);
+        var body = await ReadBody(http).ConfigureAwait(false);
+        return await LearningUser(http, HttpMethod.Post, "paths/evidence", session!.Value.Bearer, "employee", body).ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> TeamPaths(HttpContext http)
+    {
+        http.Response.Headers.CacheControl = "no-store";
+        if (http.User.Identity?.IsAuthenticated != true)
+            return Results.Unauthorized();
+        if (!string.Equals(http.User.FindFirst("active_workspace")?.Value, "people_manager", StringComparison.Ordinal))
+            return Results.Json(new { error = "Choose the people manager workspace first." }, statusCode: StatusCodes.Status403Forbidden);
+        var session = await Session(http).ConfigureAwait(false);
+        if (session is null)
+            return Results.Unauthorized();
+        return await LearningUser(http, HttpMethod.Get, "team/paths", session.Value.Bearer, "people_manager", null).ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> ValidateStep(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        if (http.User.Identity?.IsAuthenticated != true)
+            return Results.Unauthorized();
+        if (!string.Equals(http.User.FindFirst("active_workspace")?.Value, "people_manager", StringComparison.Ordinal))
+            return Results.Json(new { error = "Choose the people manager workspace first." }, statusCode: StatusCodes.Status403Forbidden);
+        var session = await Session(http).ConfigureAwait(false);
+        if (session is null)
+            return Results.Unauthorized();
+        var body = await ReadBody(http).ConfigureAwait(false);
+        return await LearningUser(http, HttpMethod.Post, "validations", session.Value.Bearer, "people_manager", body).ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> LearningUser(HttpContext http, HttpMethod method, string path, string bearer, string workspace, string? json)
+    {
+        var learning = http.RequestServices.GetRequiredService<LearningApiClient>();
+        var reply = await learning.SendAsync(method, path, null, bearer, workspace, Correlation(http), json, http.RequestAborted).ConfigureAwait(false);
+        return Results.Text(reply.Body, "application/json", statusCode: reply.Status);
     }
 
     private static async Task<IResult> AssignStep(HttpContext http)

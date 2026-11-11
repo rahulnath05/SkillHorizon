@@ -2,6 +2,7 @@ using SkillHorizon.Access;
 using SkillHorizon.Activation;
 using SkillHorizon.Hosting;
 using SkillHorizon.Readiness;
+using SkillHorizon.Workforce;
 
 namespace SkillHorizon.Api;
 
@@ -16,6 +17,8 @@ public static class LearningEndpoints
         app.MapGet("/internal/sittings/authorizations", InternalGrant);
         app.MapPost("/internal/results", ApplyResult);
         app.MapGet("/employee/subject", EmployeeSubject);
+        app.MapPost("/commands/paths/open", OpenPath);
+        app.MapPost("/commands/validations/authorize", AuthorizeValidation);
         return app;
     }
 
@@ -98,6 +101,33 @@ public static class LearningEndpoints
         }
     }
 
+    private static async Task<IResult> OpenPath(HttpContext context, IGrantCheck grants, IPersonGap gap, CancellationToken cancellationToken)
+    {
+        var refused = await RefuseUnless(context, grants, Workspaces.Employee, cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        try
+        {
+            var plan = await gap.PlanAsync(Subject(context), cancellationToken).ConfigureAwait(false);
+            return Results.Ok(plan);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Results.Problem(title: "Path refused", detail: exception.Message, statusCode: StatusCodes.Status400BadRequest);
+        }
+    }
+
+    private static async Task<IResult> AuthorizeValidation(HttpContext context, IGrantCheck grants, ITeamDirectory team, ValidationRequest? body, CancellationToken cancellationToken)
+    {
+        var refused = await RefuseUnless(context, grants, Workspaces.PeopleManager, cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        var link = await team.FindCurrentLinkAsync(Subject(context), body?.SubjectId ?? "", cancellationToken).ConfigureAwait(false);
+        return link is null
+            ? Results.Problem(title: "Validation refused", detail: "That person is not an active direct report.", statusCode: StatusCodes.Status403Forbidden)
+            : Results.Ok(link);
+    }
+
     private static async Task<IResult> EmployeeSubject(HttpContext context, IGrantCheck grants, CancellationToken cancellationToken)
     {
         var refused = await RefuseUnless(context, grants, Workspaces.Employee, cancellationToken).ConfigureAwait(false);
@@ -142,4 +172,6 @@ public static class LearningEndpoints
     private sealed record AuthorizeRequest(Guid WaveId);
 
     private sealed record ApplyResultRequest(Guid AuthorizationId, Guid ResultId, MeasuredSkill[]? Proficiencies);
+
+    private sealed record ValidationRequest(string? SubjectId);
 }

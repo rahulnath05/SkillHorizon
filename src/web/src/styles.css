@@ -407,6 +407,13 @@ button { cursor: pointer; }
   list-style: none;
 }
 
+.path form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
 .gap-list li {
   display: flex;
   flex-wrap: wrap;
@@ -749,6 +756,11 @@ button { cursor: pointer; }
   .workspace h1, .gate-head h1 { font-size: 26px; }
   .team-table { min-width: 0; }
   .team-table th, .team-table td { padding: 12px 10px; }
+  .gap-list, .gap-list li { min-width: 0; }
+  .gap-list li {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 
 @media (max-width: 620px) {

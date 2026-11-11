@@ -4,9 +4,9 @@ Working checklists for the build. The short order is [the sequencing note](../ar
 
 ## Current
 
-Next slice: [04 Paths](04-paths.md).
+Next slice: [05 Practice](05-practice.md).
 
-Slice 03 is done. The learning service authorizes a sitting against one benchmark version and one admitted wave, seals a person-level gap, and keeps raw responses out of the domain database. Paths are not started.
+Slice 04 is done. The next slice is not started. L&D submits a pack, a competency lead seals it, and practice readiness is a snapshot with an as-of time.
 
 ## Status rule
 
@@ -29,7 +29,7 @@ At the start of a build session, read `Current` and open that child. Do the firs
 | 01 Workforce | [01-workforce.md](01-workforce.md) | done |
 | 02 Benchmarks | [02-benchmarks.md](02-benchmarks.md) | done |
 | 03 Learning | [03-learning.md](03-learning.md) | done |
-| 04 Paths | [04-paths.md](04-paths.md) | not-started |
+| 04 Paths | [04-paths.md](04-paths.md) | done |
 | 05 Practice | [05-practice.md](05-practice.md) | not-started |
 | 06 Territories | [06-territories.md](06-territories.md) | not-started |
 | 07 Mira | [07-mira.md](07-mira.md) | not-started |

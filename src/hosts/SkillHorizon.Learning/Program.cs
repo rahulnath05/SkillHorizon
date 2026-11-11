@@ -9,6 +9,8 @@ if (string.IsNullOrWhiteSpace(options.AssessmentConnectionString) || string.IsNu
     throw new InvalidOperationException("SkillHorizon assessment and progress connection strings are required.");
 if (string.IsNullOrWhiteSpace(options.ApiUrl))
     throw new InvalidOperationException("SkillHorizon:ApiUrl is required.");
+if (string.IsNullOrWhiteSpace(options.EvidenceRoot))
+    throw new InvalidOperationException("SkillHorizon:EvidenceRoot is required.");
 
 builder.AddSkillHorizonTelemetry("skillhorizon-learning");
 builder.Services.AddSkillHorizonSecrets();
@@ -35,6 +37,11 @@ builder.Services.AddSingleton(serviceProvider =>
 });
 builder.Services.AddSingleton(serviceProvider =>
     new ProgressSteps(serviceProvider.GetRequiredService<ProgressData>().Source, serviceProvider.GetRequiredService<CoreCaller>().Client));
+builder.Services.AddSingleton<IEvidenceFiles>(_ => new FileEvidenceStore(options.EvidenceRoot));
+builder.Services.AddSingleton(serviceProvider => new DevelopmentPaths(
+    serviceProvider.GetRequiredService<ProgressData>().Source,
+    serviceProvider.GetRequiredService<CoreCaller>().Client,
+    serviceProvider.GetRequiredService<IEvidenceFiles>()));
 builder.Services.AddSingleton<ItemFixture>();
 builder.Services.AddHealthChecks()
     .AddNpgSql(options.AssessmentConnectionString, name: "assessment-postgres")
@@ -109,6 +116,90 @@ app.MapPost("/progress/steps", async (HttpContext context, ProgressSteps steps, 
     }
 });
 
+app.MapPost("/paths", async (HttpContext context, DevelopmentPaths paths, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        return Results.Ok(await paths.OpenAsync(Incoming.Bearer(context), Incoming.Workspace(context), Incoming.Correlation(context), cancellationToken).ConfigureAwait(false));
+    }
+    catch (InvalidOperationException exception)
+    {
+        return Results.Problem(title: "Path refused", detail: exception.Message, statusCode: StatusCodes.Status400BadRequest);
+    }
+});
+app.MapGet("/paths/current", async (HttpContext context, DevelopmentPaths paths, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var path = await paths.ReadOwnAsync(Incoming.Bearer(context), Incoming.Workspace(context), Incoming.Correlation(context), cancellationToken).ConfigureAwait(false);
+        return path is null ? Results.NotFound() : Results.Ok(path);
+    }
+    catch (InvalidOperationException exception)
+    {
+        return Results.Problem(title: "Path refused", detail: exception.Message, statusCode: StatusCodes.Status400BadRequest);
+    }
+});
+app.MapPost("/paths/evidence", async (HttpContext context, DevelopmentPaths paths, EvidenceBody? body, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var content = Convert.FromBase64String(body?.ContentBase64 ?? "");
+        return Results.Ok(await paths.AddEvidenceAsync(
+            Incoming.Bearer(context),
+            Incoming.Workspace(context),
+            Incoming.Correlation(context),
+            body?.StepId ?? Guid.Empty,
+            body?.FileName ?? "",
+            content,
+            cancellationToken).ConfigureAwait(false));
+    }
+    catch (Exception exception) when (exception is InvalidOperationException or FormatException)
+    {
+        _ = exception;
+        return Results.Problem(title: "Evidence refused", detail: "That evidence was not stored.", statusCode: StatusCodes.Status400BadRequest);
+    }
+});
+app.MapPost("/validations", async (HttpContext context, DevelopmentPaths paths, ValidationBody? body, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        return Results.Ok(await paths.ValidateAsync(
+            Incoming.Bearer(context),
+            Incoming.Workspace(context),
+            Incoming.Correlation(context),
+            body?.SubjectId ?? "",
+            body?.StepId ?? Guid.Empty,
+            cancellationToken).ConfigureAwait(false));
+    }
+    catch (InvalidOperationException exception)
+    {
+        return Results.Problem(title: "Validation refused", detail: exception.Message, statusCode: StatusCodes.Status400BadRequest);
+    }
+});
+app.MapPost("/progress/steps/{stepId:guid}/completions", async (Guid stepId, HttpContext context, DevelopmentPaths paths, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        await paths.CompleteExternalAsync(Incoming.Bearer(context), Incoming.Workspace(context), Incoming.Correlation(context), stepId, cancellationToken).ConfigureAwait(false);
+        return Results.NoContent();
+    }
+    catch (InvalidOperationException exception)
+    {
+        return Results.Problem(title: "Completion refused", detail: exception.Message, statusCode: StatusCodes.Status400BadRequest);
+    }
+});
+app.MapGet("/team/paths", async (HttpContext context, DevelopmentPaths paths, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        return Results.Ok(new { people = await paths.TeamAsync(Incoming.Bearer(context), Incoming.Workspace(context), Incoming.Correlation(context), cancellationToken).ConfigureAwait(false) });
+    }
+    catch (InvalidOperationException exception)
+    {
+        return Results.Problem(title: "Path refused", detail: exception.Message, statusCode: StatusCodes.Status400BadRequest);
+    }
+});
+
 if (options.LoadLearningFixture)
     app.Services.GetRequiredService<ItemFixture>().LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
 
@@ -129,5 +220,23 @@ public sealed class CoreCaller
 public sealed record AnswerBody(Guid ItemId, int Rank);
 
 public sealed record ExternalStep(string Provider, string Title);
+
+public sealed record EvidenceBody(Guid StepId, string? FileName, string? ContentBase64);
+
+public sealed record ValidationBody(string? SubjectId, Guid StepId);
+
+static class Incoming
+{
+    public static string Bearer(HttpContext context)
+    {
+        var header = context.Request.Headers.Authorization.ToString();
+        const string prefix = "Bearer ";
+        return header.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ? header[prefix.Length..].Trim() : "";
+    }
+
+    public static string Workspace(HttpContext context) => context.Request.Headers[SkillHorizonContext.WorkspaceHeader].ToString();
+
+    public static string Correlation(HttpContext context) => context.Request.Headers[SkillHorizonContext.CorrelationHeader].ToString();
+}
 
 public partial class Program;

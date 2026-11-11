@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { chooseWorkspace, signIn, signOut, useShell } from "./api";
 import { activeWorkspaceCode, resolveDestination, type ShellState } from "./shell";
 import { Gate, Loading, Platform, useTitle } from "./ui";
+import { DevelopmentPathPanel, TeamPaths } from "./path";
 import { Sitting } from "./sitting";
 import { PublishedStandards, StandardsAuthoring } from "./standards";
 import { TeamDirectory } from "./team";
@@ -242,8 +243,10 @@ export function WorkspacePage() {
       <main className="workspace" id="main" data-screen="workspace" data-workspace={code}>
         <div className={wide ? "workspace-in team-in" : "workspace-in"}>
           {team ? <TeamDirectory /> : null}
+          {team ? <TeamPaths /> : null}
           {authoring ? <StandardsAuthoring /> : null}
           {code === "employee" ? <Sitting /> : null}
+          {code === "employee" ? <DevelopmentPathPanel /> : null}
           {published ? <PublishedStandards /> : null}
           {!team && !authoring && !published ? (
             <>

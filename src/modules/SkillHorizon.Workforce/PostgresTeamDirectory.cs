@@ -38,4 +38,26 @@ public sealed class PostgresTeamDirectory : ITeamDirectory
 
         return people;
     }
+
+    public async Task<ManagementLink?> FindCurrentLinkAsync(
+        string managerEmployeeId,
+        string reportEmployeeId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = _dataSource.CreateCommand(
+            """
+            SELECT link.manager_employee_id, link.report_employee_id
+            FROM workforce.management_relationship AS link
+            JOIN workforce.person AS report ON report.employee_id = link.report_employee_id
+            WHERE link.manager_employee_id = $1
+              AND link.report_employee_id = $2
+              AND report.employment_status = 'active'
+            """);
+        command.Parameters.AddWithValue(managerEmployeeId);
+        command.Parameters.AddWithValue(reportEmployeeId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            return null;
+        return new ManagementLink(reader.GetString(0), reader.GetString(1));
+    }
 }
