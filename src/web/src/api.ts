@@ -443,6 +443,8 @@ export type PackRow = {
   classification: string;
   exceptionNote?: string | null;
   benchmarkVersionId?: string | null;
+  reviewedAt?: string | null;
+  decision?: string | null;
 };
 
 export type AttestationPack = {
@@ -479,6 +481,51 @@ export async function sealPack(packId: string): Promise<AttestationPack> {
   if (!response.ok) throw new Error(await readError(response));
   const pack = (await response.json()) as AttestationPack;
   return { ...pack, rows: pack.rows ?? [] };
+}
+
+export async function markReviewed(packId: string, rowIds: string[]): Promise<AttestationPack> {
+  const response = await postJson(`/api/packs/${packId}/reviews`, { rowIds });
+  if (!response.ok) throw new Error(await readError(response));
+  const pack = (await response.json()) as AttestationPack;
+  return { ...pack, rows: pack.rows ?? [] };
+}
+
+export async function decideException(packId: string, rowId: string, decision: string): Promise<AttestationPack> {
+  const response = await postJson(`/api/packs/${packId}/decisions`, { rowId, decision });
+  if (!response.ok) throw new Error(await readError(response));
+  const pack = (await response.json()) as AttestationPack;
+  return { ...pack, rows: pack.rows ?? [] };
+}
+
+export type PracticeRequest = {
+  requestId: string;
+  reportEmployeeId: string;
+  displayName: string;
+  note: string;
+  recordedAt: string;
+  acceptedAt?: string | null;
+};
+
+export type PracticeBriefing = {
+  practiceCode: string;
+  pack: AttestationPack | null;
+  requests: PracticeRequest[];
+  snapshot: PracticeSnapshot | null;
+};
+
+export async function getPracticeBriefing(practice: string): Promise<PracticeBriefing> {
+  const body = await readOk<PracticeBriefing>(`/api/practice/briefing?practice=${encodeURIComponent(practice)}`);
+  return {
+    ...body,
+    pack: body.pack ? { ...body.pack, rows: body.pack.rows ?? [] } : null,
+    requests: body.requests ?? [],
+  };
+}
+
+export async function acceptPracticeRequest(requestId: string, practiceCode: string): Promise<PracticeRequest> {
+  const response = await postJson(`/api/practice/requests/${requestId}/accept`, { practiceCode });
+  if (!response.ok) throw new Error(await readError(response));
+  return (await response.json()) as PracticeRequest;
 }
 
 export type PracticeSnapshot = {

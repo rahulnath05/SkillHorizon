@@ -164,6 +164,24 @@ public sealed class PostgresAttestationPacks : IAttestationPacks
                 throw new InvalidOperationException("That practice is outside this lead's scope.");
         }
 
+        await using (var open = new NpgsqlCommand(
+            """
+            SELECT count(*)
+            FROM attestation.pack_row AS row
+            WHERE row.pack_id = $1
+              AND row.classification <> 'aligned'
+              AND NOT EXISTS (
+                  SELECT 1 FROM attestation.exception_decision AS decision
+                  WHERE decision.row_id = row.row_id)
+            """,
+            connection,
+            transaction))
+        {
+            open.Parameters.AddWithValue(packId);
+            if (Convert.ToInt32(await open.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false)) > 0)
+                throw new InvalidOperationException("An exception has no recorded decision.");
+        }
+
         Guid taxonomyVersionId;
         await using (var taxonomy = new NpgsqlCommand(
             "SELECT taxonomy_version_id FROM taxonomy.version WHERE status = 'published'",
@@ -276,6 +294,124 @@ public sealed class PostgresAttestationPacks : IAttestationPacks
         return await Read(packId, cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<PackView> MarkReviewedAsync(
+        string subjectId,
+        string correlationId,
+        Guid packId,
+        IReadOnlyList<Guid> rowIds,
+        CancellationToken cancellationToken)
+    {
+        var ids = rowIds.Distinct().ToArray();
+        if (ids.Length == 0)
+            throw new InvalidOperationException("Name the aligned rows to mark.");
+
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await LockSubmitted(connection, transaction, subjectId, packId, cancellationToken).ConfigureAwait(false);
+        var classifications = new Dictionary<Guid, string>();
+        await using (var rows = new NpgsqlCommand(
+            "SELECT row_id, classification FROM attestation.pack_row WHERE pack_id = $1",
+            connection,
+            transaction))
+        {
+            rows.Parameters.AddWithValue(packId);
+            await using var reader = await rows.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                classifications[reader.GetGuid(0)] = reader.GetString(1);
+        }
+
+        foreach (var id in ids)
+        {
+            if (!classifications.TryGetValue(id, out var classification))
+                throw new InvalidOperationException("That row is not in this pack.");
+            if (!string.Equals(classification, "aligned", StringComparison.Ordinal))
+                throw new InvalidOperationException("An exception row cannot be batch-marked.");
+        }
+
+        foreach (var id in ids)
+        {
+            await using var insert = new NpgsqlCommand(
+                """
+                INSERT INTO attestation.row_review (row_id, reviewed_by, reviewed_at)
+                VALUES ($1, $2, now())
+                ON CONFLICT (row_id) DO NOTHING
+                """,
+                connection,
+                transaction);
+            insert.Parameters.AddWithValue(id);
+            insert.Parameters.AddWithValue(subjectId);
+            await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        await _audit.WriteAsync(
+            connection,
+            transaction,
+            new AuditEntry(subjectId, "pack.reviewed", "attestation.pack", packId, correlationId, "{\"rows\":" + ids.Length + "}"),
+            cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return await Read(packId, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<PackView> DecideAsync(
+        string subjectId,
+        string correlationId,
+        Guid packId,
+        Guid rowId,
+        string decision,
+        CancellationToken cancellationToken)
+    {
+        var text = decision.Trim();
+        if (text.Length is < 1 or > 500)
+            throw new InvalidOperationException("An exception decision is a note of at most 500 characters.");
+
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await LockSubmitted(connection, transaction, subjectId, packId, cancellationToken).ConfigureAwait(false);
+        string? classification = null;
+        await using (var row = new NpgsqlCommand(
+            "SELECT classification FROM attestation.pack_row WHERE pack_id = $1 AND row_id = $2",
+            connection,
+            transaction))
+        {
+            row.Parameters.AddWithValue(packId);
+            row.Parameters.AddWithValue(rowId);
+            var found = await row.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            if (found is string value)
+                classification = value;
+        }
+
+        if (classification is null)
+            throw new InvalidOperationException("That row is not in this pack.");
+        if (string.Equals(classification, "aligned", StringComparison.Ordinal))
+            throw new InvalidOperationException("An aligned row has no exception to decide.");
+
+        await using (var insert = new NpgsqlCommand(
+            """
+            INSERT INTO attestation.exception_decision (row_id, decision, decided_by, decided_at)
+            VALUES ($1, $2, $3, now())
+            ON CONFLICT (row_id) DO UPDATE
+                SET decision = EXCLUDED.decision,
+                    decided_by = EXCLUDED.decided_by,
+                    decided_at = EXCLUDED.decided_at
+            """,
+            connection,
+            transaction))
+        {
+            insert.Parameters.AddWithValue(rowId);
+            insert.Parameters.AddWithValue(text);
+            insert.Parameters.AddWithValue(subjectId);
+            await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        await _audit.WriteAsync(
+            connection,
+            transaction,
+            new AuditEntry(subjectId, "exception.decided", "attestation.pack_row", rowId, correlationId, JsonSerializer.Serialize(new { packId }, Json)),
+            cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return await Read(packId, cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<IReadOnlyList<PackView>> ListAsync(string? practiceCode, CancellationToken cancellationToken)
     {
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
@@ -343,11 +479,14 @@ public sealed class PostgresAttestationPacks : IAttestationPacks
         await using var command = new NpgsqlCommand(
             """
             SELECT row.row_id, row.job_profile_id, row.profile_code, row.profile_name,
-                   row.classification, row.exception_note, sealed.benchmark_version_id
+                   row.classification, row.exception_note, sealed.benchmark_version_id,
+                   review.reviewed_at, decision.decision
             FROM attestation.pack_row AS row
             LEFT JOIN attestation.seal AS seal ON seal.pack_id = row.pack_id
             LEFT JOIN attestation.sealed_benchmark AS sealed
                 ON sealed.seal_id = seal.seal_id AND sealed.job_profile_id = row.job_profile_id
+            LEFT JOIN attestation.row_review AS review ON review.row_id = row.row_id
+            LEFT JOIN attestation.exception_decision AS decision ON decision.row_id = row.row_id
             WHERE row.pack_id = $1
             ORDER BY row.profile_name
             """,
@@ -363,10 +502,47 @@ public sealed class PostgresAttestationPacks : IAttestationPacks
                 rowReader.GetString(3),
                 rowReader.GetString(4),
                 rowReader.IsDBNull(5) ? null : rowReader.GetString(5),
-                rowReader.IsDBNull(6) ? null : rowReader.GetGuid(6)));
+                rowReader.IsDBNull(6) ? null : rowReader.GetGuid(6),
+                rowReader.IsDBNull(7) ? null : Timestamp(rowReader.GetValue(7)),
+                rowReader.IsDBNull(8) ? null : rowReader.GetString(8)));
         }
 
         return new PackView(packId, practiceCode, status, submittedBy, taxonomyVersionId, lead, sealedAt, rows);
+    }
+
+    private static async Task LockSubmitted(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        string subjectId,
+        Guid packId,
+        CancellationToken cancellationToken)
+    {
+        string practiceCode;
+        string status;
+        await using (var pack = new NpgsqlCommand(
+            "SELECT practice_code, status FROM attestation.pack WHERE pack_id = $1 FOR UPDATE",
+            connection,
+            transaction))
+        {
+            pack.Parameters.AddWithValue(packId);
+            await using var reader = await pack.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                throw new InvalidOperationException("That pack does not exist.");
+            practiceCode = reader.GetString(0);
+            status = reader.GetString(1);
+        }
+
+        if (!string.Equals(status, "submitted", StringComparison.Ordinal))
+            throw new InvalidOperationException("That pack is already sealed.");
+
+        await using var scope = new NpgsqlCommand(
+            "SELECT 1 FROM access.practice_scope WHERE subject_id = $1 AND practice_code = $2",
+            connection,
+            transaction);
+        scope.Parameters.AddWithValue(subjectId);
+        scope.Parameters.AddWithValue(practiceCode);
+        if (await scope.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) is null)
+            throw new InvalidOperationException("That practice is outside this lead's scope.");
     }
 
     private static async Task<bool> PracticeExists(

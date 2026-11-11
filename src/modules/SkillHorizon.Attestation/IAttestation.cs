@@ -9,7 +9,9 @@ public sealed record PackRowView(
     string ProfileName,
     string Classification,
     string? ExceptionNote,
-    Guid? BenchmarkVersionId);
+    Guid? BenchmarkVersionId,
+    DateTimeOffset? ReviewedAt,
+    string? Decision);
 
 public sealed record PackView(
     Guid PackId,
@@ -43,6 +45,21 @@ public interface IAttestationPacks
         string correlationId,
         string practiceCode,
         IReadOnlyList<PackRowWrite> rows,
+        CancellationToken cancellationToken);
+
+    Task<PackView> MarkReviewedAsync(
+        string subjectId,
+        string correlationId,
+        Guid packId,
+        IReadOnlyList<Guid> rowIds,
+        CancellationToken cancellationToken);
+
+    Task<PackView> DecideAsync(
+        string subjectId,
+        string correlationId,
+        Guid packId,
+        Guid rowId,
+        string decision,
         CancellationToken cancellationToken);
 
     Task<PackView> SealAsync(string subjectId, string correlationId, Guid packId, CancellationToken cancellationToken);
