@@ -21,6 +21,15 @@ public static class ShellEndpoints
         app.MapPost("/api/signout", (Delegate)SignOut);
         app.MapPost("/api/workspace", (Delegate)Choose);
         app.MapGet("/api/team", (Delegate)Team);
+        app.MapGet("/api/team/snapshot", (Delegate)TeamSnapshot);
+        app.MapGet("/api/team/reviews", (Delegate)TeamReviews);
+        app.MapGet("/api/team/evidence", (Delegate)TeamEvidence);
+        app.MapPost("/api/team/profile-confirmations", (Delegate)ConfirmProfile);
+        app.MapPost("/api/team/assessment-reviews", (Delegate)ReviewAssessment);
+        app.MapPost("/api/team/corrections", (Delegate)FileCorrection);
+        app.MapGet("/api/team/skills", (Delegate)TeamSkills);
+        app.MapGet("/api/team/commitments", (Delegate)TeamCommitments);
+        app.MapPost("/api/team/commitments", (Delegate)CreateCommitment);
         app.MapGet("/api/standards", (Delegate)Standards);
         app.MapGet("/api/assessment", (Delegate)Assessment);
         app.MapGet("/api/home", (Delegate)Home);
@@ -445,6 +454,68 @@ public static class ShellEndpoints
         var session = await Session(http).ConfigureAwait(false);
         var body = await ReadBody(http).ConfigureAwait(false);
         return await LearningUser(http, HttpMethod.Post, "paths/evidence", session!.Value.Bearer, "employee", body).ConfigureAwait(false);
+    }
+
+    private static Task<IResult> TeamSnapshot(HttpContext http) => ManagerRead(http, "workforce/team/snapshot");
+
+    private static Task<IResult> TeamReviews(HttpContext http) => ManagerRead(http, "workforce/team/reviews");
+
+    private static Task<IResult> TeamSkills(HttpContext http) => ManagerRead(http, "workforce/team/skills");
+
+    private static Task<IResult> TeamCommitments(HttpContext http) => ManagerRead(http, "workforce/team/commitments");
+
+    private static async Task<IResult> TeamEvidence(HttpContext http)
+    {
+        var refused = await ManagerContext(http).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        var session = await Session(http).ConfigureAwait(false);
+        return await LearningUser(http, HttpMethod.Get, "team/evidence", session!.Value.Bearer, "people_manager", null).ConfigureAwait(false);
+    }
+
+    private static Task<IResult> ConfirmProfile(HttpContext http) => ManagerPost(http, "workforce/team/profile-confirmations");
+
+    private static Task<IResult> ReviewAssessment(HttpContext http) => ManagerPost(http, "workforce/team/assessment-reviews");
+
+    private static Task<IResult> FileCorrection(HttpContext http) => ManagerPost(http, "workforce/team/corrections");
+
+    private static Task<IResult> CreateCommitment(HttpContext http) => ManagerPost(http, "workforce/team/commitments");
+
+    private static async Task<IResult> ManagerRead(HttpContext http, string path)
+    {
+        var refused = await ManagerContext(http).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        var session = await Session(http).ConfigureAwait(false);
+        var api = http.RequestServices.GetRequiredService<CoreApiClient>();
+        var reply = await api.SendAsync(HttpMethod.Get, path, "people_manager", session!.Value.Bearer, Correlation(http) ?? "", null, http.RequestAborted).ConfigureAwait(false);
+        return Results.Text(reply.Body, "application/json", statusCode: reply.Status);
+    }
+
+    private static async Task<IResult> ManagerPost(HttpContext http, string path)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var refused = await ManagerContext(http).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        var session = await Session(http).ConfigureAwait(false);
+        var body = await ReadBody(http).ConfigureAwait(false);
+        var api = http.RequestServices.GetRequiredService<CoreApiClient>();
+        var reply = await api.SendAsync(HttpMethod.Post, path, "people_manager", session!.Value.Bearer, Correlation(http) ?? "", body, http.RequestAborted).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(reply.Body))
+            return Results.StatusCode(reply.Status);
+        return Results.Text(reply.Body, "application/json", statusCode: reply.Status);
+    }
+
+    private static async Task<IResult?> ManagerContext(HttpContext http)
+    {
+        http.Response.Headers.CacheControl = "no-store";
+        if (http.User.Identity?.IsAuthenticated != true)
+            return Results.Unauthorized();
+        if (!string.Equals(http.User.FindFirst("active_workspace")?.Value, "people_manager", StringComparison.Ordinal))
+            return Results.Json(new { error = "Choose the people manager workspace first." }, statusCode: StatusCodes.Status403Forbidden);
+        return await Session(http).ConfigureAwait(false) is null ? Results.Unauthorized() : null;
     }
 
     private static async Task<IResult> TeamPaths(HttpContext http)

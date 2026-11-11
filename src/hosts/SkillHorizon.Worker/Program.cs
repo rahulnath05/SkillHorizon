@@ -23,6 +23,7 @@ builder.Services.AddHostedService<ReferenceFanoutWorker>();
 builder.Services.AddHostedService<ReferenceInboxWorker>();
 builder.Services.AddHostedService<OutboxPublishWorker>();
 builder.Services.AddHostedService<PracticeProjectionWorker>();
+builder.Services.AddHostedService<TeamProjectionWorker>();
 builder.Services.AddHealthChecks()
     .AddNpgSql(options.DomainConnectionString, name: "domain-postgres")
     .AddRedis(options.Redis, name: "redis");

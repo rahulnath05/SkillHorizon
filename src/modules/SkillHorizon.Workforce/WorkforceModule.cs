@@ -11,6 +11,7 @@ public static class WorkforceModule
         services.AddSingleton<IHrFeed, FixtureHrFeed>();
         services.AddSingleton<IWorkforceSync, PostgresWorkforceSync>();
         services.AddSingleton<ITeamDirectory, PostgresTeamDirectory>();
+        services.AddSingleton<ITeamWorkspace, PostgresTeamWorkspace>();
         return services;
     }
 }

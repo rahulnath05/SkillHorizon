@@ -36,6 +36,7 @@ app.UseSkillHorizonAuthentication();
 app.UseSkillHorizonZoneGate();
 app.MapHealthChecks("/health");
 app.MapWorkforce();
+app.MapManager();
 app.MapStandards();
 app.MapLearning();
 app.MapPractice();

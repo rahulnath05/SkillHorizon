@@ -56,6 +56,10 @@ public sealed class SkillHorizonOptions
 
     public int PracticeProjectionIntervalSeconds { get; set; }
 
+    public bool ProjectTeamOnStartup { get; set; }
+
+    public int TeamProjectionIntervalSeconds { get; set; }
+
     public OidcOptions Oidc { get; set; } = new();
 }
 
