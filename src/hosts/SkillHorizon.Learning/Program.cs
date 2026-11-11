@@ -42,6 +42,11 @@ builder.Services.AddSingleton(serviceProvider => new DevelopmentPaths(
     serviceProvider.GetRequiredService<ProgressData>().Source,
     serviceProvider.GetRequiredService<CoreCaller>().Client,
     serviceProvider.GetRequiredService<IEvidenceFiles>()));
+builder.Services.AddSingleton(serviceProvider => new EmployeeRecord(
+    serviceProvider.GetRequiredService<NpgsqlDataSource>(),
+    serviceProvider.GetRequiredService<ProgressData>().Source,
+    serviceProvider.GetRequiredService<CoreCaller>().Client,
+    serviceProvider.GetRequiredService<IEvidenceFiles>()));
 builder.Services.AddSingleton<ItemFixture>();
 builder.Services.AddHealthChecks()
     .AddNpgSql(options.AssessmentConnectionString, name: "assessment-postgres")
@@ -125,6 +130,69 @@ app.MapPost("/paths", async (HttpContext context, DevelopmentPaths paths, Cancel
     catch (InvalidOperationException exception)
     {
         return Results.Problem(title: "Path refused", detail: exception.Message, statusCode: StatusCodes.Status400BadRequest);
+    }
+});
+app.MapGet("/employee/activity", async (HttpContext context, EmployeeRecord record, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var activity = await record.ReadActivityAsync(
+            Incoming.Bearer(context),
+            Incoming.Workspace(context),
+            Incoming.Correlation(context),
+            context.Request.Query["subject"].ToString(),
+            cancellationToken).ConfigureAwait(false);
+        return Results.Ok(activity);
+    }
+    catch (UnauthorizedAccessException exception)
+    {
+        return Results.Problem(title: "Record refused", detail: exception.Message, statusCode: StatusCodes.Status403Forbidden);
+    }
+    catch (InvalidOperationException exception)
+    {
+        return Results.Problem(title: "Record refused", detail: exception.Message, statusCode: StatusCodes.Status403Forbidden);
+    }
+});
+app.MapGet("/documents", async (HttpContext context, EmployeeRecord record, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var documents = await record.ListDocumentsAsync(
+            Incoming.Bearer(context),
+            Incoming.Workspace(context),
+            Incoming.Correlation(context),
+            context.Request.Query["subject"].ToString(),
+            cancellationToken).ConfigureAwait(false);
+        return Results.Ok(new { documents });
+    }
+    catch (UnauthorizedAccessException exception)
+    {
+        return Results.Problem(title: "Record refused", detail: exception.Message, statusCode: StatusCodes.Status403Forbidden);
+    }
+    catch (InvalidOperationException exception)
+    {
+        return Results.Problem(title: "Record refused", detail: exception.Message, statusCode: StatusCodes.Status403Forbidden);
+    }
+});
+app.MapGet("/documents/{evidenceId:guid}", async (Guid evidenceId, HttpContext context, EmployeeRecord record, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var file = await record.OpenDocumentAsync(
+            Incoming.Bearer(context),
+            Incoming.Workspace(context),
+            Incoming.Correlation(context),
+            evidenceId,
+            cancellationToken).ConfigureAwait(false);
+        return Results.File(file.Content, file.ContentType, file.FileName);
+    }
+    catch (UnauthorizedAccessException exception)
+    {
+        return Results.Problem(title: "Record refused", detail: exception.Message, statusCode: StatusCodes.Status403Forbidden);
+    }
+    catch (InvalidOperationException exception)
+    {
+        return Results.Problem(title: "Document refused", detail: exception.Message, statusCode: StatusCodes.Status404NotFound);
     }
 });
 app.MapGet("/paths/current", async (HttpContext context, DevelopmentPaths paths, CancellationToken cancellationToken) =>

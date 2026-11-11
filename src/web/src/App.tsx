@@ -9,6 +9,7 @@ export function App() {
         <Route path="/signin" element={<SignInPage />} />
         <Route path="/entry" element={<EntryPage />} />
         <Route path="/workspace" element={<WorkspacePage />} />
+        <Route path="/workspace/:screen" element={<WorkspacePage />} />
         <Route path="/refused" element={<RefusedPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

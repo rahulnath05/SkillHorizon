@@ -3,9 +3,9 @@ import { Link, useNavigate } from "react-router-dom";
 import { chooseWorkspace, signIn, signOut, useShell } from "./api";
 import { activeWorkspaceCode, resolveDestination, type ShellState } from "./shell";
 import { Gate, Loading, Platform, useTitle } from "./ui";
-import { DevelopmentPathPanel, TeamPaths } from "./path";
+import { EmployeeHome } from "./home";
+import { TeamPaths } from "./path";
 import { PackSubmission, PracticePanel } from "./practice";
-import { Sitting } from "./sitting";
 import { PublishedStandards, StandardsAuthoring } from "./standards";
 import { TeamDirectory } from "./team";
 import { initials, workspaceCopy } from "./workspaces";
@@ -238,19 +238,19 @@ export function WorkspacePage() {
   const team = code === "people_manager";
   const authoring = code === "learning_and_development";
   const practice = code === "competency_lead";
-  const published = code === "employee" || code === "people_manager";
+  const published = code === "people_manager";
   const wide = team || authoring || published || practice;
   return (
     <Platform shell={shell}>
       <main className="workspace" id="main" data-screen="workspace" data-workspace={code}>
+        {code === "employee" ? <EmployeeHome /> : null}
+        {code === "employee" ? null : (
         <div className={wide ? "workspace-in team-in" : "workspace-in"}>
           {team ? <TeamDirectory /> : null}
           {team ? <TeamPaths /> : null}
           {authoring ? <StandardsAuthoring /> : null}
           {authoring ? <PackSubmission /> : null}
           {practice ? <PracticePanel /> : null}
-          {code === "employee" ? <Sitting /> : null}
-          {code === "employee" ? <DevelopmentPathPanel /> : null}
           {published ? <PublishedStandards /> : null}
           {!team && !authoring && !published && !practice ? (
             <>
@@ -264,6 +264,7 @@ export function WorkspacePage() {
             <p><Link to="/entry">Choose a different workspace</Link></p>
           ) : null}
         </div>
+        )}
       </main>
     </Platform>
   );

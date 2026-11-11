@@ -184,6 +184,51 @@ export type OpenSitting = {
   readyToSeal: boolean;
 };
 
+export type EmployeeHome = {
+  atTarget: number;
+  belowTarget: number;
+  openSteps: number;
+  sittingOpen: boolean;
+};
+
+export type PersonSkill = {
+  skillCode: string;
+  skillName: string;
+  currentRank: number;
+  currentName: string;
+  targetRank: number;
+  targetName: string;
+};
+
+export type EvidenceDocument = {
+  evidenceId: string;
+  fileName: string;
+  contentType: string;
+  byteLength: number;
+  recordedAt: string;
+  stepTitle: string;
+};
+
+async function readJson<T>(path: string): Promise<T> {
+  const response = await fetch(path, { headers: { Accept: "application/json" }, cache: "no-store" });
+  if (!response.ok) throw new Error(await readError(response));
+  return (await response.json()) as T;
+}
+
+export function getHome(): Promise<EmployeeHome> {
+  return readJson<EmployeeHome>("/api/home");
+}
+
+export async function getSkills(): Promise<PersonSkill[]> {
+  const body = await readJson<{ skills?: PersonSkill[] }>("/api/skills");
+  return body.skills ?? [];
+}
+
+export async function getDocuments(): Promise<EvidenceDocument[]> {
+  const body = await readJson<{ documents?: EvidenceDocument[] }>("/api/documents");
+  return body.documents ?? [];
+}
+
 export async function getAssessment(): Promise<AssessmentSummary> {
   const response = await fetch("/api/assessment", {
     headers: { Accept: "application/json" },

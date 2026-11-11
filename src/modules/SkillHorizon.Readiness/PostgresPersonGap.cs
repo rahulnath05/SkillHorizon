@@ -132,6 +132,49 @@ public sealed class PostgresPersonGap : IPersonGap
         return await Gaps(connection, null, subjectId, cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<IReadOnlyList<PersonSkill>> ReadSkillsAsync(string subjectId, CancellationToken cancellationToken)
+    {
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = new NpgsqlCommand(
+            """
+            SELECT target.skill_code, target.skill_name,
+                   COALESCE(person.proficiency_rank, 0), COALESCE(person.proficiency_name, ''),
+                   target.proficiency_rank, target.proficiency_name
+            FROM readiness.sealed_result AS result
+            JOIN benchmark.version AS sealed ON sealed.benchmark_version_id = result.benchmark_version_id
+            JOIN benchmark.version AS published
+                ON published.job_profile_id = sealed.job_profile_id
+               AND published.status = 'published'
+            JOIN benchmark.target AS target ON target.benchmark_version_id = published.benchmark_version_id
+            LEFT JOIN readiness.proficiency AS person
+                ON person.result_id = result.result_id AND person.skill_code = target.skill_code
+            WHERE result.subject_id = $1
+              AND result.result_id = (
+                  SELECT latest.result_id
+                  FROM readiness.sealed_result AS latest
+                  WHERE latest.subject_id = $1
+                  ORDER BY latest.sealed_at DESC
+                  LIMIT 1)
+            ORDER BY target.skill_name
+            """,
+            connection);
+        command.Parameters.AddWithValue(subjectId);
+        var skills = new List<PersonSkill>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            skills.Add(new PersonSkill(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetInt32(2),
+                reader.GetString(3),
+                reader.GetInt32(4),
+                reader.GetString(5)));
+        }
+
+        return skills;
+    }
+
     public async Task<PathPlan> PlanAsync(string subjectId, CancellationToken cancellationToken)
     {
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);

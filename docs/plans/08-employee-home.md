@@ -2,7 +2,7 @@
 
 Parent: [Master plan](README.md)
 
-Status: `not-started`
+Status: `done`
 
 Depends on [06 Territories](06-territories.md) being `done`.
 
@@ -18,8 +18,8 @@ Mira, My tasks, manager pages, the item bank, and another person’s records.
 
 | Step | Work | Status |
 |------|------|--------|
-| 08.1 | Dashboard read for the signed-in person: skills at target, skills below target, open path steps, and whether a sitting is still open. One query over rows that already exist | not-started |
-| 08.2 | My skills page. Each skill on the benchmark in force, with target, sealed proficiency, and gap. No item text | not-started |
-| 08.3 | My documents page. Evidence metadata for this person’s steps, and a download of their own file only | not-started |
-| 08.4 | Employee navigation opens dashboard, skills, path, assessment, and documents. Path and assessment stay the screens already built | not-started |
-| 08.5 | A read of another person’s skills or documents is refused | not-started |
+| 08.1 | Dashboard read for the signed-in person: skills at target, skills below target, open path steps, and whether a sitting is still open. One query over rows that already exist | done |
+| 08.2 | My skills page. Each skill on the benchmark in force, with target, sealed proficiency, and gap. No item text | done |
+| 08.3 | My documents page. Evidence metadata for this person’s steps, and a download of their own file only | done |
+| 08.4 | Employee navigation opens dashboard, skills, path, assessment, and documents. Path and assessment stay the screens already built | done |
+| 08.5 | A read of another person’s skills or documents is refused | done |

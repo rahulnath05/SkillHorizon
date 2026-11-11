@@ -17,6 +17,7 @@ public static class LearningEndpoints
         app.MapGet("/internal/sittings/authorizations", InternalGrant);
         app.MapPost("/internal/results", ApplyResult);
         app.MapGet("/employee/subject", EmployeeSubject);
+        app.MapGet("/employee/skills", Skills);
         app.MapPost("/commands/paths/open", OpenPath);
         app.MapPost("/commands/validations/authorize", AuthorizeValidation);
         return app;
@@ -134,6 +135,29 @@ public static class LearningEndpoints
         if (refused is not null)
             return refused;
         return Results.Ok(new { subjectId = Subject(context) });
+    }
+
+    private static async Task<IResult> Skills(HttpContext context, IGrantCheck grants, IPersonGap gap, CancellationToken cancellationToken)
+    {
+        var refused = await RefuseUnless(context, grants, Workspaces.Employee, cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        var other = OtherPerson(context);
+        if (other is not null)
+            return other;
+        var skills = await gap.ReadSkillsAsync(Subject(context), cancellationToken).ConfigureAwait(false);
+        return Results.Ok(new { skills });
+    }
+
+    private static IResult? OtherPerson(HttpContext context)
+    {
+        var requested = context.Request.Query["subject"].ToString();
+        if (string.IsNullOrWhiteSpace(requested) || string.Equals(requested, Subject(context), StringComparison.Ordinal))
+            return null;
+        return Results.Problem(
+            title: "Record refused",
+            detail: "Another person's record is not available in this workspace.",
+            statusCode: StatusCodes.Status403Forbidden);
     }
 
     private static async Task<IResult> LearningCommand(HttpContext context, IGrantCheck grants, CancellationToken cancellationToken, Func<Task<IResult>> action)
