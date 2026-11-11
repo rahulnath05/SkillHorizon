@@ -173,6 +173,42 @@ public sealed class PostgresWaveAdmission : IWaveAdmission
         return new ActivationCentre(budget, waves);
     }
 
+    public async Task<IntakeSummary> ReadIntakeAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var launch = 0;
+        var rolling = 0;
+        await using (var counts = new NpgsqlCommand(
+            "SELECT route, count(*) FROM activation.admission GROUP BY route",
+            connection))
+        await using (var reader = await counts.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+        {
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                var route = reader.GetString(0);
+                var count = Convert.ToInt32(reader.GetInt64(1));
+                if (route == "launch")
+                    launch = count;
+                else if (route == "rolling")
+                    rolling = count;
+            }
+        }
+
+        var people = new List<RollingAdmission>();
+        await using var command = new NpgsqlCommand(
+            """
+            SELECT subject_id, wave_id, admitted_at
+            FROM activation.admission
+            WHERE route = 'rolling'
+            ORDER BY admitted_at DESC, subject_id
+            """,
+            connection);
+        await using var admitted = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await admitted.ReadAsync(cancellationToken).ConfigureAwait(false))
+            people.Add(new RollingAdmission(admitted.GetString(0), admitted.GetGuid(1), admitted.GetFieldValue<DateTimeOffset>(2)));
+        return new IntakeSummary(launch, rolling, people);
+    }
+
     public async Task<ZonePerson?> FindPersonAsync(string employeeId, CancellationToken cancellationToken)
     {
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);

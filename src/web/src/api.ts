@@ -336,6 +336,73 @@ export async function nameExpert(body: { domainName: string; expertName: string;
   if (!response.ok) throw new Error(await readError(response));
 }
 
+export type ProgrammeSnapshot = {
+  snapshotId: string;
+  kind: string;
+  waveId: string | null;
+  asOf: string;
+  completedCount: number;
+  openCount: number;
+  durationSeconds: number;
+};
+
+export type DeclaredRow = {
+  subjectId: string;
+  skillCode: string;
+  declaredRank: number | null;
+  declaredName: string | null;
+  assessedRank: number | null;
+  assessedName: string | null;
+};
+
+export type RollingAdmission = {
+  subjectId: string;
+  waveId: string;
+  admittedAt: string;
+};
+
+export type IntakeSummary = {
+  launchCount: number;
+  rollingCount: number;
+  rolling: RollingAdmission[];
+};
+
+export async function getProgrammeSnapshot(kind: "operations" | "scorecard"): Promise<ProgrammeSnapshot | null> {
+  const body = await readJson<{ snapshot?: ProgrammeSnapshot | null }>(`/api/studio/${kind}`);
+  return body.snapshot ?? null;
+}
+
+export async function takeProgrammeSnapshot(): Promise<void> {
+  const response = await postJson("/api/studio/snapshots", {});
+  if (!response.ok) throw new Error(await readError(response));
+}
+
+export async function getPilot(waveId: string): Promise<ProgrammeSnapshot | null> {
+  const body = await readJson<{ snapshot?: ProgrammeSnapshot | null }>(`/api/studio/pilot?wave=${encodeURIComponent(waveId)}`);
+  return body.snapshot ?? null;
+}
+
+export async function takePilot(waveId: string): Promise<ProgrammeSnapshot> {
+  const response = await postJson("/api/studio/pilot", { waveId });
+  if (!response.ok) throw new Error(await readError(response));
+  return (await response.json()) as ProgrammeSnapshot;
+}
+
+export async function getDeclared(): Promise<DeclaredRow[]> {
+  const body = await readJson<{ rows?: DeclaredRow[] }>("/api/studio/declared");
+  return body.rows ?? [];
+}
+
+export async function declareLevel(body: { subjectId: string; skillCode: string; declaredRank: number; declaredName: string }): Promise<void> {
+  const response = await postJson("/api/studio/declarations", body);
+  if (!response.ok) throw new Error(await readError(response));
+}
+
+export async function getIntake(path: "/api/studio/overview" | "/api/studio/rolling"): Promise<IntakeSummary> {
+  const body = await readJson<IntakeSummary>(path);
+  return { launchCount: body.launchCount ?? 0, rollingCount: body.rollingCount ?? 0, rolling: body.rolling ?? [] };
+}
+
 export async function sealSitting(body: { token: string; sittingId: string }): Promise<SkillGap[]> {
   const response = await postJson("/api/sittings/seal", body);
   if (!response.ok) throw new Error(await readError(response));
