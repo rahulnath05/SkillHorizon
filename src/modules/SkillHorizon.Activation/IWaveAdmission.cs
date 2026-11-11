@@ -13,6 +13,10 @@ public sealed record WaveListing(
 
 public sealed record ActivationCentre(int? SittingBudget, IReadOnlyList<WaveListing> Waves);
 
+public sealed record RollingAdmission(string SubjectId, Guid WaveId, DateTimeOffset AdmittedAt);
+
+public sealed record IntakeSummary(int LaunchCount, int RollingCount, IReadOnlyList<RollingAdmission> Rolling);
+
 public sealed record ZonePerson(string EmployeeId, string LegalEntityId, string EmploymentStatus, DateTimeOffset? JoinedAt);
 
 public sealed record AuthorizedSkill(
@@ -50,6 +54,8 @@ public interface IWaveAdmission
         CancellationToken cancellationToken);
 
     Task<ActivationCentre> ReadCentreAsync(string zoneId, CancellationToken cancellationToken);
+
+    Task<IntakeSummary> ReadIntakeAsync(CancellationToken cancellationToken);
 
     Task<ZonePerson?> FindPersonAsync(string employeeId, CancellationToken cancellationToken);
 

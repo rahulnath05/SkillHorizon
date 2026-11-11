@@ -44,6 +44,15 @@ public static class ShellEndpoints
         app.MapGet("/api/studio/marks", (Delegate)StudioMarks);
         app.MapGet("/api/studio/panel", (Delegate)StudioPanel);
         app.MapPost("/api/studio/panel", (Delegate)StudioExpert);
+        app.MapGet("/api/studio/declared", (Delegate)StudioDeclared);
+        app.MapPost("/api/studio/declarations", (Delegate)StudioDeclare);
+        app.MapGet("/api/studio/rolling", (Delegate)StudioRolling);
+        app.MapGet("/api/studio/overview", (Delegate)StudioOverview);
+        app.MapPost("/api/studio/snapshots", (Delegate)StudioSnapshots);
+        app.MapGet("/api/studio/operations", (Delegate)StudioOperations);
+        app.MapGet("/api/studio/scorecard", (Delegate)StudioScorecard);
+        app.MapPost("/api/studio/pilot", (Delegate)StudioPilot);
+        app.MapGet("/api/studio/pilot", (Delegate)StudioPilotRead);
         app.MapPost("/api/progress/steps", (Delegate)AssignStep);
         app.MapPost("/api/paths", (Delegate)OpenPath);
         app.MapGet("/api/path", (Delegate)ReadPath);
@@ -350,6 +359,67 @@ public static class ShellEndpoints
             return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
         var body = await ReadBody(http).ConfigureAwait(false);
         return await Studio(http, HttpMethod.Post, "studio/panel", body).ConfigureAwait(false);
+    }
+
+    private static Task<IResult> StudioDeclared(HttpContext http) =>
+        StudioCore(http, HttpMethod.Get, "studio/declared", null);
+
+    private static async Task<IResult> StudioDeclare(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var body = await ReadBody(http).ConfigureAwait(false);
+        return await StudioCore(http, HttpMethod.Post, "studio/declarations", body).ConfigureAwait(false);
+    }
+
+    private static Task<IResult> StudioRolling(HttpContext http) =>
+        StudioCore(http, HttpMethod.Get, "studio/rolling", null);
+
+    private static Task<IResult> StudioOverview(HttpContext http) =>
+        StudioCore(http, HttpMethod.Get, "studio/overview", null);
+
+    private static async Task<IResult> StudioSnapshots(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        return await Studio(http, HttpMethod.Post, "studio/snapshots", "{}").ConfigureAwait(false);
+    }
+
+    private static Task<IResult> StudioOperations(HttpContext http) =>
+        Studio(http, HttpMethod.Get, "studio/operations", null);
+
+    private static Task<IResult> StudioScorecard(HttpContext http) =>
+        Studio(http, HttpMethod.Get, "studio/scorecard", null);
+
+    private static async Task<IResult> StudioPilot(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var body = await ReadBody(http).ConfigureAwait(false);
+        return await Studio(http, HttpMethod.Post, "studio/pilot", body).ConfigureAwait(false);
+    }
+
+    private static Task<IResult> StudioPilotRead(HttpContext http)
+    {
+        var wave = http.Request.Query["wave"].ToString();
+        return Studio(http, HttpMethod.Get, "studio/pilot?wave=" + Uri.EscapeDataString(wave), null);
+    }
+
+    private static async Task<IResult> StudioCore(HttpContext http, HttpMethod method, string path, string? json)
+    {
+        http.Response.Headers.CacheControl = "no-store";
+        if (http.User.Identity?.IsAuthenticated != true)
+            return Results.Unauthorized();
+        if (!string.Equals(http.User.FindFirst("active_workspace")?.Value, "learning_and_development", StringComparison.Ordinal))
+            return Results.Json(new { error = "Choose the learning and development workspace first." }, statusCode: StatusCodes.Status403Forbidden);
+        var session = await Session(http).ConfigureAwait(false);
+        if (session is null)
+            return Results.Unauthorized();
+        var api = http.RequestServices.GetRequiredService<CoreApiClient>();
+        var reply = await api.SendAsync(method, path, "learning_and_development", session.Value.Bearer, Correlation(http) ?? "", json, http.RequestAborted).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(reply.Body))
+            return Results.StatusCode(reply.Status);
+        return Results.Text(reply.Body, "application/json", statusCode: reply.Status);
     }
 
     private static async Task<IResult> Studio(HttpContext http, HttpMethod method, string path, string? json)

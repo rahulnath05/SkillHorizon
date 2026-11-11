@@ -13,6 +13,10 @@ public static class LearningEndpoints
         app.MapPost("/commands/activation/budget", SetBudget);
         app.MapGet("/activation/centre", Centre);
         app.MapGet("/studio/author", Author);
+        app.MapPost("/studio/declarations", Declare);
+        app.MapGet("/studio/declared", Declared);
+        app.MapGet("/studio/rolling", Intake);
+        app.MapGet("/studio/overview", Intake);
         app.MapPost("/commands/waves/admit", Admit);
         app.MapPost("/commands/waves/rolling", Rolling);
         app.MapPost("/commands/sittings/authorize", Authorize);
@@ -37,6 +41,45 @@ public static class LearningEndpoints
     {
         var refused = await RefuseUnless(context, grants, Workspaces.LearningAndDevelopment, cancellationToken).ConfigureAwait(false);
         return refused ?? Results.NoContent();
+    }
+
+    private static async Task<IResult> Declare(HttpContext context, IGrantCheck grants, IDeclaredLevel levels, DeclarationRequest? body, CancellationToken cancellationToken)
+    {
+        var refused = await RefuseUnless(context, grants, Workspaces.LearningAndDevelopment, cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        try
+        {
+            var row = await levels.DeclareAsync(
+                body?.SubjectId ?? "",
+                body?.SkillCode ?? "",
+                body?.DeclaredRank ?? 0,
+                body?.DeclaredName ?? "",
+                Subject(context),
+                Correlation(context),
+                cancellationToken).ConfigureAwait(false);
+            return Results.Ok(row);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Results.Problem(title: "Declaration refused", detail: exception.Message, statusCode: StatusCodes.Status400BadRequest);
+        }
+    }
+
+    private static async Task<IResult> Declared(HttpContext context, IGrantCheck grants, IDeclaredLevel levels, CancellationToken cancellationToken)
+    {
+        var refused = await RefuseUnless(context, grants, Workspaces.LearningAndDevelopment, cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        return Results.Ok(new { rows = await levels.ReadAsync(cancellationToken).ConfigureAwait(false) });
+    }
+
+    private static async Task<IResult> Intake(HttpContext context, IGrantCheck grants, IWaveAdmission waves, CancellationToken cancellationToken)
+    {
+        var refused = await RefuseUnless(context, grants, Workspaces.LearningAndDevelopment, cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        return Results.Ok(await waves.ReadIntakeAsync(cancellationToken).ConfigureAwait(false));
     }
 
     private static async Task<IResult> Centre(HttpContext context, IGrantCheck grants, IWaveAdmission waves, Microsoft.Extensions.Options.IOptions<SkillHorizonOptions> options, CancellationToken cancellationToken)
@@ -254,6 +297,8 @@ public static class LearningEndpoints
         context.Items[SkillHorizonContext.CorrelationItem]?.ToString() is { Length: > 0 } value ? value : "learning";
 
     private sealed record BudgetRequest(int SittingBudget);
+
+    private sealed record DeclarationRequest(string? SubjectId, string? SkillCode, int DeclaredRank, string? DeclaredName);
 
     private sealed record AdmitRequest(Guid BenchmarkVersionId, string[]? SubjectIds);
 

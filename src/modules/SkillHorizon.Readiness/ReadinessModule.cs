@@ -9,6 +9,7 @@ public static class ReadinessModule
     public static IServiceCollection AddReadinessModule(this IServiceCollection services)
     {
         services.AddSingleton<IPersonGap, PostgresPersonGap>();
+        services.AddSingleton<IDeclaredLevel, PostgresDeclaredLevel>();
         services.AddSingleton<IPracticeProjection, PostgresPracticeProjection>();
         return services;
     }

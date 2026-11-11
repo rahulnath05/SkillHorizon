@@ -47,6 +47,9 @@ builder.Services.AddSingleton(serviceProvider => new EmployeeRecord(
     serviceProvider.GetRequiredService<ProgressData>().Source,
     serviceProvider.GetRequiredService<CoreCaller>().Client,
     serviceProvider.GetRequiredService<IEvidenceFiles>()));
+builder.Services.AddSingleton(serviceProvider => new AssessmentOperations(
+    serviceProvider.GetRequiredService<NpgsqlDataSource>(),
+    serviceProvider.GetRequiredService<CoreCaller>().Client));
 builder.Services.AddSingleton(serviceProvider => new AssessmentBank(
     serviceProvider.GetRequiredService<NpgsqlDataSource>(),
     serviceProvider.GetRequiredService<CoreCaller>().Client));
@@ -343,6 +346,49 @@ app.MapPost("/progress/steps/{stepId:guid}/completions", async (Guid stepId, Htt
         return Results.Problem(title: "Completion refused", detail: exception.Message, statusCode: StatusCodes.Status400BadRequest);
     }
 });
+app.MapPost("/studio/snapshots", async (HttpContext context, AssessmentOperations operations, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var snapshots = await operations.TakeProgrammeAsync(Incoming.Bearer(context), Incoming.Workspace(context), Incoming.Correlation(context), cancellationToken).ConfigureAwait(false);
+        return Results.Ok(new { snapshots });
+    }
+    catch (UnauthorizedAccessException exception)
+    {
+        return Results.Problem(title: "Studio refused", detail: exception.Message, statusCode: StatusCodes.Status403Forbidden);
+    }
+});
+app.MapGet("/studio/operations", async (HttpContext context, AssessmentOperations operations, CancellationToken cancellationToken) =>
+    await Snapshot(context, operations, "operations", null, cancellationToken).ConfigureAwait(false));
+app.MapGet("/studio/scorecard", async (HttpContext context, AssessmentOperations operations, CancellationToken cancellationToken) =>
+    await Snapshot(context, operations, "scorecard", null, cancellationToken).ConfigureAwait(false));
+app.MapPost("/studio/pilot", async (HttpContext context, AssessmentOperations operations, PilotWrite? body, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var snapshot = await operations.TakePilotAsync(
+            Incoming.Bearer(context),
+            Incoming.Workspace(context),
+            Incoming.Correlation(context),
+            body?.WaveId ?? Guid.Empty,
+            cancellationToken).ConfigureAwait(false);
+        return Results.Ok(snapshot);
+    }
+    catch (UnauthorizedAccessException exception)
+    {
+        return Results.Problem(title: "Studio refused", detail: exception.Message, statusCode: StatusCodes.Status403Forbidden);
+    }
+    catch (InvalidOperationException exception)
+    {
+        return Results.Problem(title: "Pilot refused", detail: exception.Message, statusCode: StatusCodes.Status400BadRequest);
+    }
+});
+app.MapGet("/studio/pilot", async (HttpContext context, AssessmentOperations operations, CancellationToken cancellationToken) =>
+{
+    var wave = context.Request.Query["wave"].ToString();
+    Guid? waveId = Guid.TryParse(wave, out var parsed) ? parsed : null;
+    return await Snapshot(context, operations, "pilot", waveId, cancellationToken).ConfigureAwait(false);
+});
 app.MapGet("/studio/bank", async (HttpContext context, AssessmentBank bank, CancellationToken cancellationToken) =>
 {
     try
@@ -445,6 +491,29 @@ if (options.LoadLearningFixture)
 
 app.Run();
 
+static async Task<IResult> Snapshot(HttpContext context, AssessmentOperations operations, string kind, Guid? waveId, CancellationToken cancellationToken)
+{
+    try
+    {
+        var snapshot = await operations.LatestAsync(
+            Incoming.Bearer(context),
+            Incoming.Workspace(context),
+            Incoming.Correlation(context),
+            kind,
+            waveId,
+            cancellationToken).ConfigureAwait(false);
+        return Results.Ok(new { snapshot });
+    }
+    catch (UnauthorizedAccessException exception)
+    {
+        return Results.Problem(title: "Studio refused", detail: exception.Message, statusCode: StatusCodes.Status403Forbidden);
+    }
+    catch (InvalidOperationException exception)
+    {
+        return Results.Problem(title: "Snapshot refused", detail: exception.Message, statusCode: StatusCodes.Status400BadRequest);
+    }
+}
+
 public sealed record ProgressData(NpgsqlDataSource Source);
 
 public sealed class CoreCaller
@@ -456,6 +525,8 @@ public sealed class CoreCaller
 
     public HttpClient Client { get; }
 }
+
+public sealed record PilotWrite(Guid WaveId);
 
 public sealed record AnswerBody(Guid ItemId, int Rank, string? ResponseBody);
 

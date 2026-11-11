@@ -2,7 +2,7 @@
 
 Parent: [Master plan](README.md)
 
-Status: `not-started`
+Status: `done`
 
 Depends on [15 Assessment bank](15-assessment-bank.md) being `done`.
 
@@ -18,8 +18,8 @@ Browsing response text, warehouse export, and Mira.
 
 | Step | Work | Status |
 |------|------|--------|
-| 16.1 | Declared level stored apart from the sealed proficiency. The page shows both. A declaration does not update the sealed result | not-started |
-| 16.2 | Operations and programme scorecard snapshots: sittings completed, still open, and duration aggregates. No response text | not-started |
-| 16.3 | Pilot report snapshot for one wave. The page reads it and shows the as-of time | not-started |
-| 16.4 | Studio overview, and the rolling-intake page, read those snapshots and the admissions from slice 14 | not-started |
-| 16.5 | An employee workspace token is refused on every studio route | not-started |
+| 16.1 | Declared level stored apart from the sealed proficiency. The page shows both. A declaration does not update the sealed result | done |
+| 16.2 | Operations and programme scorecard snapshots: sittings completed, still open, and duration aggregates. No response text | done |
+| 16.3 | Pilot report snapshot for one wave. The page reads it and shows the as-of time | done |
+| 16.4 | Studio overview, and the rolling-intake page, read those snapshots and the admissions from slice 14 | done |
+| 16.5 | An employee workspace token is refused on every studio route | done |

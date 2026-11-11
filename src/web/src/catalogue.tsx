@@ -28,6 +28,7 @@ import {
   type Standards,
 } from "./api";
 import { PackSubmission } from "./practice";
+import { OperationsPage } from "./operations";
 import { StudioPage } from "./studio";
 import { formatAsOf, useTitle } from "./ui";
 
@@ -42,6 +43,12 @@ const screens = [
   { id: "bank", label: "Item bank" },
   { id: "marking", label: "Rubric and marking" },
   { id: "panel", label: "SME panel" },
+  { id: "studio", label: "Studio overview" },
+  { id: "scorecard", label: "Programme scorecard" },
+  { id: "operations", label: "Assessment operations" },
+  { id: "declared", label: "Declared versus assessed" },
+  { id: "pilot", label: "Pilot report" },
+  { id: "rolling", label: "Rolling intake" },
 ];
 
 export function CatalogueHome() {
@@ -64,6 +71,7 @@ export function CatalogueHome() {
         {current === "market" ? <MarketPage /> : null}
         {current === "activation" ? <ActivationPage /> : null}
         {current === "bank" || current === "marking" || current === "panel" ? <StudioPage screen={current} /> : null}
+        {current === "studio" || current === "scorecard" || current === "operations" || current === "declared" || current === "pilot" || current === "rolling" ? <OperationsPage screen={current} /> : null}
         {current === "overview" ? <OverviewPage /> : null}
       </div>
     </div>
