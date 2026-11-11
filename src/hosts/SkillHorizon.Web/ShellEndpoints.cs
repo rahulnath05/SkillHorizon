@@ -62,6 +62,10 @@ public static class ShellEndpoints
         app.MapGet("/api/catalogue/market", (Delegate)CatalogueMarket);
         app.MapPost("/api/market/draft", (Delegate)SaveMarket);
         app.MapPost("/api/market/publish", (Delegate)PublishMarket);
+        app.MapGet("/api/activation/centre", (Delegate)ActivationCentre);
+        app.MapPost("/api/activation/budget", (Delegate)ActivationBudget);
+        app.MapPost("/api/waves/admit", (Delegate)AdmitWave);
+        app.MapPost("/api/waves/rolling", (Delegate)RollingIntake);
         app.MapPost("/api/packs", (Delegate)SubmitPack);
         app.MapGet("/api/packs", (Delegate)ListPacks);
         app.MapPost("/api/packs/{packId:guid}/reviews", (Delegate)MarkReviewed);
@@ -746,6 +750,33 @@ public static class ShellEndpoints
             return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
         var body = await ReadBody(http).ConfigureAwait(false);
         return await Proxy(http, HttpMethod.Post, "commands/cohorts", body).ConfigureAwait(false);
+    }
+
+    private static Task<IResult> ActivationCentre(HttpContext http) =>
+        Proxy(http, HttpMethod.Get, "activation/centre", null);
+
+    private static async Task<IResult> ActivationBudget(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var body = await ReadBody(http).ConfigureAwait(false);
+        return await Proxy(http, HttpMethod.Post, "commands/activation/budget", body).ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> AdmitWave(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var body = await ReadBody(http).ConfigureAwait(false);
+        return await Proxy(http, HttpMethod.Post, "commands/waves/admit", body).ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> RollingIntake(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var body = await ReadBody(http).ConfigureAwait(false);
+        return await Proxy(http, HttpMethod.Post, "commands/waves/rolling", body).ConfigureAwait(false);
     }
 
     private static Task<IResult> CatalogueMarket(HttpContext http)

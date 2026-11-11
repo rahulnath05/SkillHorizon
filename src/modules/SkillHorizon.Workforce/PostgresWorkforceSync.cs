@@ -66,10 +66,12 @@ public sealed class PostgresWorkforceSync : IWorkforceSync
                 personal_learning_assigned,
                 display_name,
                 closed_at,
-                projected_at)
+                projected_at,
+                joined_at)
             VALUES (
                 $1, $2, $3, $4, $5, $6, $7,
                 CASE WHEN $5 = 'closed' THEN now() ELSE NULL END,
+                now(),
                 now())
             ON CONFLICT (employee_id) DO UPDATE SET
                 legal_entity_id = EXCLUDED.legal_entity_id,
