@@ -21,6 +21,13 @@ public static class SkillHorizonAuthenticationExtensions
                 return;
             }
 
+            if (await RegistryGate.AllowAsync(context).ConfigureAwait(false))
+            {
+                context.Items[RegistryGate.Item] = true;
+                await next().ConfigureAwait(false);
+                return;
+            }
+
             var header = context.Request.Headers.Authorization.ToString();
             var bearer = header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
                 ? header["Bearer ".Length..].Trim()

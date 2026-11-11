@@ -159,6 +159,14 @@ public sealed class FrameworkInfrastructure : IAsyncLifetime
                 INSERT INTO routing.legal_entity (legal_entity_id, zone_id, display_name)
                 VALUES ('LE-LOCAL', 'local', 'Local employing entity')
                 ON CONFLICT (legal_entity_id) DO NOTHING;
+
+                INSERT INTO integration.connector (connector_id, zone_id, connector_type, endpoint, secret_name, enabled)
+                VALUES ('local-hr', 'local', 'hr', NULL, NULL, true)
+                ON CONFLICT (connector_id) DO NOTHING;
+
+                INSERT INTO capability.flag (zone_id, capability_code, enabled)
+                VALUES ('local', 'reference_replication', true)
+                ON CONFLICT (zone_id, capability_code) DO NOTHING;
                 """,
                 control);
             await command.ExecuteNonQueryAsync();
@@ -212,6 +220,8 @@ public sealed class FrameworkInfrastructure : IAsyncLifetime
         Environment.SetEnvironmentVariable("SkillHorizon__LoadStandardsFixture", "false");
         Environment.SetEnvironmentVariable("SkillHorizon__LoadLearningFixture", "false");
         Environment.SetEnvironmentVariable("SkillHorizon__ReplicateReference", "false");
+        Environment.SetEnvironmentVariable("SkillHorizon__FanoutReference", "false");
+        Environment.SetEnvironmentVariable("SkillHorizon__ReceiveReference", "false");
         Environment.SetEnvironmentVariable("SkillHorizon__ProjectPracticeOnStartup", "false");
         Environment.SetEnvironmentVariable("SkillHorizon__PracticeProjectionIntervalSeconds", "0");
         Environment.SetEnvironmentVariable("SkillHorizon__AssessmentConnectionString", AssessmentConnection);
@@ -274,6 +284,8 @@ public sealed class ApiFactory : WebApplicationFactory<ApiHost::Program>
         ["SkillHorizon:LoadStandardsFixture"] = "false",
         ["SkillHorizon:LoadLearningFixture"] = "false",
         ["SkillHorizon:ReplicateReference"] = "false",
+        ["SkillHorizon:FanoutReference"] = "false",
+        ["SkillHorizon:ReceiveReference"] = "false",
         ["SkillHorizon:LearningServiceKeySecretName"] = "learning-service-key",
         ["SkillHorizon:Secrets:learning-service-key"] = FrameworkInfrastructure.LearningKey,
         ["SkillHorizon:SigningKeySecretName"] = "local-signing-key",

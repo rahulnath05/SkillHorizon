@@ -27,6 +27,9 @@ Local sign-in identities, separated by who they are rather than by workspace:
 - `person-nogrant` is mapped and has no workspace grant.
 - `person-ld` holds L&D only and opens that workspace directly.
 - `person-lead` holds Competency lead for the Data practice and opens that workspace directly.
+- `person-north` is legal entity `LE-NORTH`. That entity belongs to the north residency zone, so the local zone refuses the sign-in.
+
+The first wave is `local` (authoring), `north`, and `south`. A new territory follows `docs/territories/adding-a-territory.md`. `deploy/zone/compose.yaml` is the zone template.
 
 Development signing values are in `.env.example`. They are local defaults, not production secrets.
 

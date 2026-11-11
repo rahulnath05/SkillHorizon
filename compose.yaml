@@ -92,7 +92,10 @@ services:
       SkillHorizon__ZoneId: local
       SkillHorizon__DomainConnectionString: Host=postgres;Port=5432;Database=skillhorizon_domain;Username=skillhorizon;Password=skillhorizon
       SkillHorizon__Redis: redis:6379
+      SkillHorizon__ControlRegistryUrl: http://control:8080
       SkillHorizon__PublishOutbox: "true"
+      SkillHorizon__FanoutReference: "true"
+      SkillHorizon__ReceiveReference: "false"
       SkillHorizon__ProjectPracticeOnStartup: "true"
       SkillHorizon__PracticeProjectionIntervalSeconds: "20"
     depends_on:
@@ -136,7 +139,7 @@ services:
       SkillHorizon__ZoneId: local
       SkillHorizon__ApiUrl: http://api:8080
       SkillHorizon__LearningUrl: http://learning:8080
-      SkillHorizon__DevIdentities: person-multi|LE-LOCAL|person-multi;person-single|LE-LOCAL|person-single;person-unmapped|LE-OTHER|person-unmapped;person-nogrant|LE-LOCAL|person-nogrant;person-ld|LE-LOCAL|person-ld;person-lead|LE-LOCAL|person-lead
+      SkillHorizon__DevIdentities: person-multi|LE-LOCAL|person-multi;person-single|LE-LOCAL|person-single;person-unmapped|LE-OTHER|person-unmapped;person-nogrant|LE-LOCAL|person-nogrant;person-ld|LE-LOCAL|person-ld;person-lead|LE-LOCAL|person-lead;person-north|LE-NORTH|person-north
     depends_on:
       api:
         condition: service_healthy

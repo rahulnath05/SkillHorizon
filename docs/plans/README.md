@@ -4,9 +4,9 @@ Working checklists for the build. The short order is [the sequencing note](../ar
 
 ## Current
 
-Next slice: [06 Territories](06-territories.md).
+Next slice: [07 Mira](07-mira.md).
 
-Slice 05 is done. This slice has not started. The first zones run from the same template. Published reference data is replicated. Responses do not move. An unmapped person cannot land in an existing zone.
+Slice 06 is done. The first zones run from the same template. Published reference data is replicated. Responses do not move. An unmapped person cannot land in an existing zone. Mira has not started.
 
 ## Status rule
 
@@ -31,5 +31,5 @@ At the start of a build session, read `Current` and open that child. Do the firs
 | 03 Learning | [03-learning.md](03-learning.md) | done |
 | 04 Paths | [04-paths.md](04-paths.md) | done |
 | 05 Practice | [05-practice.md](05-practice.md) | done |
-| 06 Territories | [06-territories.md](06-territories.md) | not-started |
+| 06 Territories | [06-territories.md](06-territories.md) | done |
 | 07 Mira | [07-mira.md](07-mira.md) | not-started |

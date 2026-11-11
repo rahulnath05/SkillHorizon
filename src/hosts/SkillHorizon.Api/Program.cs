@@ -15,7 +15,8 @@ builder.AddSkillHorizonTelemetry("skillhorizon-api");
 builder.Services.AddSkillHorizonSecrets();
 builder.Services.AddSkillHorizonIdentity(options);
 builder.Services.AddSkillHorizonZoneDirectory(options);
-builder.Services.AddSingleton(_ => NpgsqlDataSource.Create(options.DomainConnectionString));
+builder.Services.AddSingleton(services =>
+    NpgsqlDataSource.Create(services.GetRequiredService<Microsoft.Extensions.Options.IOptions<SkillHorizonOptions>>().Value.DomainConnectionString));
 builder.Services.AddSkillHorizonModules();
 builder.Services.AddSkillHorizonMessaging(options);
 builder.Services.AddSingleton<RequireGrantFilter>();
@@ -38,6 +39,7 @@ app.MapWorkforce();
 app.MapStandards();
 app.MapLearning();
 app.MapPractice();
+app.MapAggregates();
 if (options.LoadStandardsFixture)
     app.Services.GetRequiredService<StandardsFixture>().LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
 app.Services.GetRequiredService<LearningAdmissionFixture>().LoadAsync(CancellationToken.None).GetAwaiter().GetResult();

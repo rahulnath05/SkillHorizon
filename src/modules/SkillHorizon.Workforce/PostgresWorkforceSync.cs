@@ -7,11 +7,13 @@ public sealed class PostgresWorkforceSync : IWorkforceSync
 {
     private readonly NpgsqlDataSource _dataSource;
     private readonly IHrFeed _feed;
+    private readonly IHrPlacement _placement;
 
-    public PostgresWorkforceSync(NpgsqlDataSource dataSource, IHrFeed feed)
+    public PostgresWorkforceSync(NpgsqlDataSource dataSource, IHrFeed feed, IHrPlacement placement)
     {
         _dataSource = dataSource;
         _feed = feed;
+        _placement = placement;
     }
 
     public async Task<WorkforceSyncResult> SyncAsync(CancellationToken cancellationToken)
@@ -23,10 +25,17 @@ public sealed class PostgresWorkforceSync : IWorkforceSync
     public async Task<WorkforceSyncResult> ApplyAsync(IReadOnlyList<HrRecord> records, CancellationToken cancellationToken)
     {
         var (accepted, quarantined) = Classify(records);
+        var placed = new List<AcceptedPerson>();
+        foreach (var person in accepted)
+        {
+            if (await _placement.AcceptsAsync(person.LegalEntityId, cancellationToken).ConfigureAwait(false))
+                placed.Add(person);
+        }
+
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
-        foreach (var person in accepted)
+        foreach (var person in placed)
             await UpsertPerson(connection, transaction, person, cancellationToken).ConfigureAwait(false);
 
         await ReplaceQuarantine(connection, transaction, quarantined, cancellationToken).ConfigureAwait(false);
@@ -35,9 +44,9 @@ public sealed class PostgresWorkforceSync : IWorkforceSync
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
         return new WorkforceSyncResult(
-            accepted.Count,
+            placed.Count,
             quarantined.Count,
-            accepted.Count(person => person.EmploymentStatus == "closed"));
+            placed.Count(person => person.EmploymentStatus == "closed"));
     }
 
     private static async Task UpsertPerson(

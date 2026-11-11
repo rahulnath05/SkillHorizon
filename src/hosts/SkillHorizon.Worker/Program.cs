@@ -12,11 +12,15 @@ if (string.IsNullOrWhiteSpace(options.DomainConnectionString))
 
 builder.AddSkillHorizonTelemetry("skillhorizon-worker");
 builder.Services.AddSkillHorizonSecrets();
-builder.Services.AddSingleton(_ => NpgsqlDataSource.Create(options.DomainConnectionString));
+builder.Services.AddSkillHorizonZoneDirectory(options);
+builder.Services.AddSingleton(services =>
+    NpgsqlDataSource.Create(services.GetRequiredService<Microsoft.Extensions.Options.IOptions<SkillHorizonOptions>>().Value.DomainConnectionString));
 builder.Services.AddSkillHorizonModules();
 builder.Services.AddSkillHorizonMessaging(options);
 builder.Services.AddHostedService<WorkforceSyncWorker>();
 builder.Services.AddHostedService<ReferenceReplicationWorker>();
+builder.Services.AddHostedService<ReferenceFanoutWorker>();
+builder.Services.AddHostedService<ReferenceInboxWorker>();
 builder.Services.AddHostedService<OutboxPublishWorker>();
 builder.Services.AddHostedService<PracticeProjectionWorker>();
 builder.Services.AddHealthChecks()

@@ -65,4 +65,63 @@ public sealed class ControlRegistryClient : IZoneDirectory
             throw new ZoneDirectoryUnavailableException("The control registry is unavailable.", exception);
         }
     }
+
+    public async Task<bool> HrFeedEnabledAsync(string zoneId, CancellationToken cancellationToken)
+    {
+        var key = "hr-feed:" + zoneId;
+        if (_cache.TryGetValue(key, out bool cached))
+            return cached;
+
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "zones/" + Uri.EscapeDataString(zoneId) + "/hr");
+            var registryKey = await _secrets.GetRequiredAsync(_options.RegistryKeySecretName, cancellationToken)
+                .ConfigureAwait(false);
+            request.Headers.TryAddWithoutValidation("X-Registry-Key", registryKey);
+            using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+                throw new ZoneDirectoryUnavailableException($"The control registry returned {(int)response.StatusCode}.");
+
+            var body = await response.Content.ReadFromJsonAsync<HrFeedBody>(cancellationToken).ConfigureAwait(false)
+                ?? throw new ZoneDirectoryUnavailableException("The control registry returned an empty HR feed.");
+            _cache.Set(key, body.Enabled, TimeSpan.FromSeconds(60));
+            return body.Enabled;
+        }
+        catch (ZoneDirectoryUnavailableException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        {
+            throw new ZoneDirectoryUnavailableException("The control registry is unavailable.", exception);
+        }
+    }
+
+    public async Task<IReadOnlyList<ReferenceSubscription>> ReferenceSubscribersAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "reference/subscribers");
+            var registryKey = await _secrets.GetRequiredAsync(_options.RegistryKeySecretName, cancellationToken)
+                .ConfigureAwait(false);
+            request.Headers.TryAddWithoutValidation("X-Registry-Key", registryKey);
+            using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+                throw new ZoneDirectoryUnavailableException($"The control registry returned {(int)response.StatusCode}.");
+
+            var body = await response.Content.ReadFromJsonAsync<List<ReferenceSubscription>>(cancellationToken).ConfigureAwait(false)
+                ?? throw new ZoneDirectoryUnavailableException("The control registry returned an empty subscriber list.");
+            return body;
+        }
+        catch (ZoneDirectoryUnavailableException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        {
+            throw new ZoneDirectoryUnavailableException("The control registry is unavailable.", exception);
+        }
+    }
+
+    private sealed record HrFeedBody(bool Enabled);
 }
