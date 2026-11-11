@@ -1,3 +1,5 @@
+using Npgsql;
+using SkillHorizon.Attestation;
 using SkillHorizon.Benchmark;
 using SkillHorizon.JobArchitecture;
 using SkillHorizon.Taxonomy;
@@ -11,19 +13,32 @@ public sealed class StandardsFixture
     private readonly IJobArchitecture _jobs;
     private readonly ITaxonomyAuthoring _taxonomy;
     private readonly IBenchmarkAuthoring _benchmarks;
+    private readonly IPracticeScope _scope;
+    private readonly NpgsqlDataSource _dataSource;
 
-    public StandardsFixture(IJobArchitecture jobs, ITaxonomyAuthoring taxonomy, IBenchmarkAuthoring benchmarks)
+    public StandardsFixture(
+        IJobArchitecture jobs,
+        ITaxonomyAuthoring taxonomy,
+        IBenchmarkAuthoring benchmarks,
+        IPracticeScope scope,
+        NpgsqlDataSource dataSource)
     {
         _jobs = jobs;
         _taxonomy = taxonomy;
         _benchmarks = benchmarks;
+        _scope = scope;
+        _dataSource = dataSource;
     }
 
     public async Task LoadAsync(CancellationToken cancellationToken)
     {
+        await EnsureLead(cancellationToken).ConfigureAwait(false);
         var existing = await _jobs.ListAsync(cancellationToken).ConfigureAwait(false);
         if (existing.Any(framework => framework.Code == FrameworkCode))
+        {
+            await _scope.GrantAsync("person-lead", "data", cancellationToken).ConfigureAwait(false);
             return;
+        }
 
         await _jobs.ImportAsync(
             [
@@ -75,11 +90,25 @@ public sealed class StandardsFixture
                 [new TargetDraft(sql.SkillId, intermediate.Rank), new TargetDraft(modeling.SkillId, beginner.Rank)]),
             cancellationToken).ConfigureAwait(false);
         await _benchmarks.PublishAsync(first.BenchmarkVersionId, "person-ld", "standards-fixture", cancellationToken).ConfigureAwait(false);
+        await _scope.GrantAsync("person-lead", "data", cancellationToken).ConfigureAwait(false);
         await _benchmarks.SaveDraftAsync(
             new BenchmarkDraftWrite(
                 profile.ProfileId,
                 published.TaxonomyVersionId,
                 [new TargetDraft(sql.SkillId, advanced.Rank), new TargetDraft(modeling.SkillId, beginner.Rank)]),
             cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task EnsureLead(CancellationToken cancellationToken)
+    {
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = new NpgsqlCommand(
+            """
+            INSERT INTO access.workspace_grant (grant_id, subject_id, workspace, granted_at)
+            VALUES ('55555555-5555-5555-5555-555555555555', 'person-lead', 'competency_lead', now())
+            ON CONFLICT (subject_id, workspace) DO NOTHING
+            """,
+            connection);
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 }

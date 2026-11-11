@@ -3,6 +3,7 @@ using Npgsql;
 using SkillHorizon.Audit;
 using SkillHorizon.JobArchitecture;
 using SkillHorizon.Messaging;
+using SkillHorizon.Readiness;
 using SkillHorizon.Taxonomy;
 
 namespace SkillHorizon.Benchmark;
@@ -16,19 +17,22 @@ public sealed class PostgresBenchmarkAuthoring : IBenchmarkAuthoring
     private readonly ITaxonomyAuthoring _taxonomy;
     private readonly IAuditLog _audit;
     private readonly IOutbox _outbox;
+    private readonly IPracticeProjection _practice;
 
     public PostgresBenchmarkAuthoring(
         NpgsqlDataSource dataSource,
         IJobArchitecture jobs,
         ITaxonomyAuthoring taxonomy,
         IAuditLog audit,
-        IOutbox outbox)
+        IOutbox outbox,
+        IPracticeProjection practice)
     {
         _dataSource = dataSource;
         _jobs = jobs;
         _taxonomy = taxonomy;
         _audit = audit;
         _outbox = outbox;
+        _practice = practice;
     }
 
     public async Task<BenchmarkVersionView> SaveDraftAsync(BenchmarkDraftWrite draft, CancellationToken cancellationToken)
@@ -84,6 +88,7 @@ public sealed class PostgresBenchmarkAuthoring : IBenchmarkAuthoring
             transaction,
             new OutboxDraft(BenchmarkModule.PublishedMessage, payload, correlationId),
             cancellationToken).ConfigureAwait(false);
+        await _practice.MarkDirtyAsync(connection, transaction, cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return await ReadOne(benchmarkVersionId, cancellationToken).ConfigureAwait(false);
     }
