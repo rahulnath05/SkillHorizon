@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { NavLink, useParams } from "react-router-dom";
+import { PageHead, PersonaFrame, type RailItem } from "./frame";
 import {
   admitRolling,
   admitWave,
@@ -29,52 +30,99 @@ import {
 } from "./api";
 import { PackSubmission } from "./practice";
 import { OperationsPage } from "./operations";
-import { StudioPage } from "./studio";
+import { EnginePage, StudioPage } from "./studio";
 import { formatAsOf, useTitle } from "./ui";
 
-const screens = [
-  { id: "overview", label: "Overview" },
-  { id: "taxonomy", label: "Skill taxonomy" },
-  { id: "workspace", label: "Benchmark workspace" },
-  { id: "requests", label: "Profile requests" },
-  { id: "approvals", label: "Approval queue" },
-  { id: "market", label: "Market demand" },
-  { id: "activation", label: "Activation centre" },
-  { id: "bank", label: "Item bank" },
-  { id: "marking", label: "Rubric and marking" },
-  { id: "panel", label: "SME panel" },
-  { id: "studio", label: "Studio overview" },
-  { id: "scorecard", label: "Programme scorecard" },
-  { id: "operations", label: "Assessment operations" },
-  { id: "declared", label: "Declared versus assessed" },
-  { id: "pilot", label: "Pilot report" },
-  { id: "rolling", label: "Rolling intake" },
+const primaryNav: RailItem[] = [
+  { id: "overview", label: "Overview", icon: "◫" },
+  { id: "workspace", label: "Benchmark workspace", icon: "≡" },
+  { id: "taxonomy", label: "Skill taxonomy", icon: "◇" },
+  { id: "requests", label: "Profile requests", icon: "+" },
+  { id: "approvals", label: "Approval queue", icon: "✓" },
+  { id: "activation", label: "Activation centre", icon: "→" },
+  { id: "studio", label: "Assessment & programme", icon: "▦" },
 ];
+
+const studioNav = [
+  { id: "studio", icon: "◫", label: "Overview" },
+  { id: "engine", icon: "≡", label: "Adaptive engine", pill: "ET-01" },
+  { id: "marking", icon: "◇", label: "Rubric & marking", pill: "ET-02" },
+  { id: "panel", icon: "✓", label: "SME panel", pill: "ET-04" },
+  { id: "bank", icon: "→", label: "Item bank", pill: "IB-01" },
+  { id: "scorecard", icon: "▦", label: "Programme scorecard", pill: "DR-09" },
+  { id: "operations", icon: "◔", label: "Assessment operations", pill: "DR-04" },
+  { id: "declared", icon: "◎", label: "Declared vs assessed", pill: "DR-06" },
+  { id: "pilot", icon: "✔", label: "Pilot report", pill: "DR-03" },
+  { id: "rolling", icon: "↻", label: "Rolling intake", pill: "PR-08" },
+];
+
+const studioIds = new Set(studioNav.map((item) => item.id).concat("assessment"));
 
 export function CatalogueHome() {
   const { screen } = useParams();
-  const current = screens.some((item) => item.id === screen) ? screen! : "overview";
+  const known = primaryNav.some((item) => item.id === screen) || studioIds.has(screen ?? "") || screen === "market";
+  const raw = known ? screen! : "overview";
+  const studioCurrent = raw === "assessment" ? "studio" : studioIds.has(raw) ? raw : null;
+  const inStudio = studioCurrent !== null;
+  const [counts, setCounts] = useState<{ requests?: number; approvals?: number; activation?: number }>({});
+
+  useEffect(() => {
+    let live = true;
+    void Promise.all([getCatalogueOverview(), getActivationCentre()])
+      .then(([overview, centre]) => {
+        if (!live) return;
+        setCounts({
+          requests: overview.requestCount,
+          approvals: overview.approvalCount,
+          activation: centre.waves.length,
+        });
+      })
+      .catch(() => {
+        if (live) setCounts({});
+      });
+    return () => {
+      live = false;
+    };
+  }, [raw]);
+
+  const items = primaryNav.map((item) => ({
+    ...item,
+    count: item.id === "requests" ? counts.requests : item.id === "approvals" ? counts.approvals : item.id === "activation" ? counts.activation : undefined,
+  }));
+  const studioLabel = studioNav.find((item) => item.id === studioCurrent)?.label ?? "Overview";
+  const page = inStudio ? studioLabel : raw === "market" ? "Market demand" : primaryNav.find((item) => item.id === raw)?.label ?? "Overview";
+
   return (
-    <div className="home">
-      <nav className="home-nav" aria-label="L and D">
-        {screens.map((item) => (
-          <NavLink key={item.id} to={`/workspace/${item.id}`} aria-current={current === item.id ? "page" : undefined}>
-            {item.label}
-          </NavLink>
-        ))}
-      </nav>
-      <div className="home-main">
-        {current === "taxonomy" ? <TaxonomyPage /> : null}
-        {current === "workspace" ? <WorkspacePage /> : null}
-        {current === "requests" ? <RequestsPage /> : null}
-        {current === "approvals" ? <ApprovalsPage /> : null}
-        {current === "market" ? <MarketPage /> : null}
-        {current === "activation" ? <ActivationPage /> : null}
-        {current === "bank" || current === "marking" || current === "panel" ? <StudioPage screen={current} /> : null}
-        {current === "studio" || current === "scorecard" || current === "operations" || current === "declared" || current === "pilot" || current === "rolling" ? <OperationsPage screen={current} /> : null}
-        {current === "overview" ? <OverviewPage /> : null}
-      </div>
-    </div>
+    <PersonaFrame
+      label="L&D"
+      kicker="Learning and development"
+      mark="LD"
+      section={inStudio ? "Assessment and programme" : raw === "market" ? "Benchmark workspace" : undefined}
+      page={page}
+      items={items}
+      currentId={inStudio ? studioCurrent! : raw}
+      highlightId={inStudio ? "studio" : raw === "market" ? "workspace" : raw}
+      studio={{
+        parentId: "studio",
+        open: inStudio,
+        currentId: studioCurrent ?? "studio",
+        items: studioNav,
+      }}
+    >
+      {raw === "taxonomy" ? <TaxonomyPage /> : null}
+      {raw === "workspace" ? <WorkspacePage /> : null}
+      {raw === "requests" ? <RequestsPage /> : null}
+      {raw === "approvals" ? <ApprovalsPage /> : null}
+      {raw === "market" ? <MarketPage /> : null}
+      {raw === "activation" ? <ActivationPage /> : null}
+      {studioCurrent === "engine" ? <EnginePage /> : null}
+      {studioCurrent === "bank" || studioCurrent === "marking" || studioCurrent === "panel" ? <StudioPage screen={studioCurrent} /> : null}
+      {studioCurrent === "studio" ? <OperationsPage screen="studio" /> : null}
+      {studioCurrent === "scorecard" || studioCurrent === "operations" || studioCurrent === "declared" || studioCurrent === "pilot" || studioCurrent === "rolling" ? (
+        <OperationsPage screen={studioCurrent} />
+      ) : null}
+      {raw === "overview" ? <OverviewPage /> : null}
+    </PersonaFrame>
   );
 }
 
@@ -86,26 +134,73 @@ function OverviewPage() {
     setOverview(await getCatalogueOverview());
     setProblem(null);
   }, (error) => setProblem(error));
+  const snapshots = overview?.snapshots ?? [];
+  const gaps = snapshots.reduce((total, snapshot) => total + snapshot.gapCount, 0);
   return (
     <section data-screen="overview">
-      <p className="eyebrow">L&D</p>
-      <h1>Overview</h1>
-      <p>Readiness snapshots and the queues. Responses stay in the learning service.</p>
+      <PageHead
+        eyebrow="L&D competency benchmarking"
+        title="Overview"
+        lede="See what is ready, what needs attention, and what can be sent to each competency lead. Counts come from the catalogue, and a missing snapshot stays empty."
+      />
       {problem ? <Problem text={problem} onRetry={load} /> : null}
       {overview ? (
         <>
-          <ul className="home-figures">
-            <li><b>{overview.requestCount}</b><span>Profile requests</span></li>
-            <li><b>{overview.approvalCount}</b><span>Sent for approval</span></li>
-          </ul>
-          {overview.snapshots.length === 0 ? <p>No practice snapshot has been written.</p> : null}
-          {overview.snapshots.map((snapshot) => (
-            <article key={snapshot.practiceCode}>
-              <h2>{snapshot.practiceCode}</h2>
-              <p>As of {snapshot.asOf}</p>
-              <p>{snapshot.memberCount} members · {snapshot.measuredCount} measured · {snapshot.gapCount} below the bar · {snapshot.cohortCount} cohorts</p>
+          <div className="stat-row">
+            <NavLink to="/workspace/requests">
+              <span className="kicker">Profile requests</span>
+              <strong>{overview.requestCount}</strong>
+              <span className="hint">Waiting in the catalogue</span>
+            </NavLink>
+            <NavLink to="/workspace/approvals">
+              <span className="kicker">Sent for approval</span>
+              <strong>{overview.approvalCount}</strong>
+              <span className="hint">Drafts already with a competency lead</span>
+            </NavLink>
+            <NavLink to="/workspace/workspace">
+              <span className="kicker">Practice snapshots</span>
+              <strong>{snapshots.length}</strong>
+              <span className="hint">{snapshots.length === 0 ? "None written yet" : "Practices with a stored snapshot"}</span>
+            </NavLink>
+            <div className="stat-card ink">
+              <span className="kicker">Below the bar</span>
+              <strong>{gaps}</strong>
+              <span className="hint">Sum of the stored snapshots</span>
+            </div>
+          </div>
+          <div className="split">
+            <article className="surface-card">
+              <header>
+                <div>
+                  <h2>Practice readiness</h2>
+                  <p className="card-note">Stored snapshots only</p>
+                </div>
+                <NavLink to="/workspace/approvals">Approval queue</NavLink>
+              </header>
+              {snapshots.length === 0 ? <p className="empty-note">No practice snapshot has been written.</p> : null}
+              <ul className="gap-list">
+                {snapshots.map((snapshot) => (
+                  <li key={snapshot.practiceCode}>
+                    <b>{snapshot.practiceCode}</b>
+                    <span>As of {snapshot.asOf} · {snapshot.memberCount} members · {snapshot.measuredCount} measured · {snapshot.gapCount} below the bar · {snapshot.cohortCount} cohorts</span>
+                  </li>
+                ))}
+              </ul>
             </article>
-          ))}
+            <aside className="surface-card">
+              <header>
+                <div>
+                  <h2>Where to work next</h2>
+                  <p className="card-note">The same reads as the rail</p>
+                </div>
+              </header>
+              <ul className="gap-list">
+                <li><NavLink to="/workspace/taxonomy">Skill taxonomy</NavLink><span>Draft the catalogue</span></li>
+                <li><NavLink to="/workspace/workspace">Benchmark workspace</NavLink><span>Targets and market demand</span></li>
+                <li><NavLink to="/workspace/studio">Assessment and programme</NavLink><span>Studio, operations, and intake</span></li>
+              </ul>
+            </aside>
+          </div>
         </>
       ) : null}
     </section>
@@ -130,9 +225,11 @@ function TaxonomyPage() {
   const version = taxonomy?.version ?? null;
   return (
     <section data-screen="taxonomy">
-      <p className="eyebrow">L&D</p>
-      <h1>Skill taxonomy</h1>
-      <p>One taxonomy version. A draft edit stays in this authoring zone.</p>
+      <PageHead
+        eyebrow="L&D"
+        title="Skill taxonomy"
+        lede="One taxonomy version. A draft edit stays in this authoring zone."
+      />
       {problem ? <Problem text={problem} onRetry={load} /> : null}
       {version ? <p>Version {version.versionNumber} · {version.status}</p> : <p>No taxonomy version is in this zone.</p>}
       {version?.competencies.map((competency) => (
@@ -211,9 +308,12 @@ function WorkspacePage() {
   const profiles = standards?.frameworks.flatMap((framework) => framework.profiles) ?? [];
   return (
     <section data-screen="workspace">
-      <p className="eyebrow">L&D</p>
-      <h1>Benchmark workspace</h1>
-      <p>Edit draft targets for one profile. Publish uses the command already built.</p>
+      <PageHead
+        eyebrow="L&D"
+        title="Benchmark workspace"
+        lede="Edit draft targets for one profile. Publish uses the command already built. Market demand stays on this workspace."
+        action={<NavLink to="/workspace/market">Market demand</NavLink>}
+      />
       {problem ? <Problem text={problem} onRetry={loadStandards} /> : null}
       <label>
         Profile
@@ -318,9 +418,11 @@ function RequestsPage() {
   const framework = standards?.frameworks.find((item) => item.code === frameworkCode) ?? standards?.frameworks[0];
   return (
     <section data-screen="requests">
-      <p className="eyebrow">L&D</p>
-      <h1>Profile requests</h1>
-      <p>A request filed by a manager can become a draft profile. Opening it does not publish a benchmark.</p>
+      <PageHead
+        eyebrow="L&D"
+        title="Profile requests"
+        lede="A request filed by a manager can become a draft profile. Opening it does not publish a benchmark."
+      />
       {problem ? <Problem text={problem} onRetry={load} /> : null}
       {requests.length === 0 ? <p>No profile request is waiting.</p> : null}
       <ul className="gap-list">
@@ -400,9 +502,11 @@ function ApprovalsPage() {
   const unsent = standards?.drafts.filter((bundle) => !sentIds.has(bundle.draft.benchmarkVersionId)) ?? [];
   return (
     <section data-screen="approvals">
-      <p className="eyebrow">L&D</p>
-      <h1>Approval queue</h1>
-      <p>Drafts L&D has sent. An unsent draft is not waiting on the competency lead.</p>
+      <PageHead
+        eyebrow="L&D"
+        title="Approval queue"
+        lede="Drafts L&D has sent. An unsent draft is not waiting on the competency lead."
+      />
       {problem ? <Problem text={problem} onRetry={load} /> : null}
       <h2>Sent</h2>
       {sent.length === 0 ? <p>No draft has been sent.</p> : null}
@@ -502,9 +606,10 @@ function Problem({ text, onRetry }: { text: string; onRetry: () => void }) {
 }
 
 function MarketPage() {
-  const [note, setNote] = useState("Hiring for the data practice is concentrated in two roles.");
-  const [postingCount, setPostingCount] = useState("12");
-  const [roleCount, setRoleCount] = useState("2");
+  useTitle("Market demand");
+  const [note, setNote] = useState("");
+  const [postingCount, setPostingCount] = useState("");
+  const [roleCount, setRoleCount] = useState("");
   const [draftNote, setDraftNote] = useState<string | null>(null);
   const [publishedNote, setPublishedNote] = useState<string | null>(null);
   const [publishedAt, setPublishedAt] = useState<string | null>(null);
@@ -559,9 +664,12 @@ function MarketPage() {
 
   return (
     <section data-screen="catalogue-market">
-      <p className="eyebrow">Authoring zone</p>
-      <h1>Market demand</h1>
-      <p>Write the note and counts for the data practice. Publishing is what the competency lead can read.</p>
+      <PageHead
+        eyebrow="Authoring zone"
+        title="Market demand"
+        lede="Write the note and counts for the data practice. Publishing is what the competency lead can read. An empty draft stays empty until you save one."
+        action={<NavLink to="/workspace/workspace">Back to benchmarks</NavLink>}
+      />
       {problem ? <p className="gate-alert" role="alert">{problem}</p> : null}
       <form className="task-close" onSubmit={save}>
         <h2>Draft</h2>
@@ -666,9 +774,11 @@ function ActivationPage() {
 
   return (
     <section data-screen="activation-centre">
-      <p className="eyebrow">Post-approval activation</p>
-      <h1>Activation centre</h1>
-      <p>Launch uses the zone sitting budget. Rolling intake admits one mapped person into an open wave and leaves the other admissions in place.</p>
+      <PageHead
+        eyebrow="Post-approval activation"
+        title="Activation centre"
+        lede="Launch uses the zone sitting budget. Rolling intake admits one mapped person into an open wave and leaves the other admissions in place."
+      />
       {problem ? <p className="gate-alert" role="alert">{problem}</p> : null}
       {notice ? <p role="status">{notice}</p> : null}
       <ul className="home-figures">

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { NavLink, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
+import { PageHead, PersonaFrame, type RailItem } from "./frame";
 import {
   acceptPracticeRequest,
   createCohort,
@@ -20,7 +21,7 @@ import {
   type PracticePicture,
   type Standards,
 } from "./api";
-import { formatAsOf } from "./ui";
+import { formatAsOf, useTitle } from "./ui";
 
 function SentForReview() {
   const [drafts, setDrafts] = useState<Awaited<ReturnType<typeof getCatalogueReview>>>([]);
@@ -101,6 +102,7 @@ export function PackSubmission() {
             }],
           })
             .then(() => load())
+            .then(() => notePracticeChange())
             .then(() => setProblem(null))
             .catch((error: unknown) => {
               setProblem(error instanceof Error ? error.message : "That pack was not submitted.");
@@ -151,41 +153,59 @@ export function PackSubmission() {
 
 const practiceCode = "data";
 
-const screens = [
-  { id: "briefing", label: "Briefing" },
-  { id: "requests", label: "Profile requests" },
-  { id: "review", label: "Review room" },
-  { id: "sign-off", label: "Sign-off" },
-  { id: "baseline", label: "Baseline" },
-  { id: "progression", label: "Progression" },
-  { id: "market", label: "Market demand" },
-  { id: "readiness", label: "Readiness" },
+const screens: RailItem[] = [
+  { id: "briefing", label: "Briefing", icon: "◫" },
+  { id: "requests", label: "Profile requests", icon: "+" },
+  { id: "review", label: "Review room", icon: "≡" },
+  { id: "sign-off", label: "Sign-off", icon: "✓" },
+  { id: "baseline", label: "Baseline", icon: "▦" },
+  { id: "progression", label: "Progression", icon: "↗" },
+  { id: "market", label: "Market demand", icon: "◎" },
+  { id: "readiness", label: "Readiness", icon: "↗" },
 ];
 
 export function PracticeHome() {
   const { screen } = useParams();
   const current = screens.some((item) => item.id === screen) ? screen! : "briefing";
+  const { briefing, load } = useBriefing();
+  useEffect(() => {
+    const onChange = () => { void load(); };
+    window.addEventListener("skillhorizon-practice", onChange);
+    return () => window.removeEventListener("skillhorizon-practice", onChange);
+  }, [load]);
+  const pack = briefing?.pack?.status === "submitted" ? briefing.pack : null;
+  const requestCount = (briefing?.requests ?? []).filter((request) => !request.acceptedAt).length;
+  const reviewCount = pack
+    ? pack.rows.filter((row) => (row.classification === "aligned" ? !row.reviewedAt : !row.decision)).length
+    : 0;
+  const items = screens.map((item) => ({
+    ...item,
+    count: item.id === "briefing" ? (pack ? 1 : 0) : item.id === "requests" ? requestCount : item.id === "review" ? reviewCount : undefined,
+  }));
+  const page = screens.find((item) => item.id === current)?.label ?? "Briefing";
   return (
-    <div className="home">
-      <nav className="home-nav" aria-label="Competency lead">
-        {screens.map((item) => (
-          <NavLink key={item.id} to={`/workspace/${item.id}`} aria-current={current === item.id ? "page" : undefined}>
-            {item.label}
-          </NavLink>
-        ))}
-      </nav>
-      <div className="home-main">
-        {current === "requests" ? <RequestsPage /> : null}
-        {current === "review" ? <ReviewPage /> : null}
-        {current === "sign-off" ? <SignOffPage /> : null}
-        {current === "baseline" ? <BaselinePage /> : null}
-        {current === "progression" ? <ProgressionPage /> : null}
-        {current === "market" ? <MarketPage /> : null}
-        {current === "readiness" ? <ReadinessPage /> : null}
-        {current === "briefing" ? <BriefingPage /> : null}
-      </div>
-    </div>
+    <PersonaFrame
+      label="Competency lead"
+      kicker="Data practice"
+      mark="CL"
+      page={page}
+      items={items}
+      currentId={current}
+    >
+      {current === "requests" ? <RequestsPage /> : null}
+      {current === "review" ? <ReviewPage /> : null}
+      {current === "sign-off" ? <SignOffPage /> : null}
+      {current === "baseline" ? <BaselinePage /> : null}
+      {current === "progression" ? <ProgressionPage /> : null}
+      {current === "market" ? <MarketPage /> : null}
+      {current === "readiness" ? <ReadinessPage /> : null}
+      {current === "briefing" ? <BriefingPage /> : null}
+    </PersonaFrame>
   );
+}
+
+function notePracticeChange() {
+  window.dispatchEvent(new Event("skillhorizon-practice"));
 }
 
 function useBriefing() {
@@ -204,6 +224,7 @@ function useBriefing() {
 }
 
 function BriefingPage() {
+  useTitle("Briefing");
   const { briefing, problem, setProblem, load } = useBriefing();
   const [memberIds, setMemberIds] = useState("person-single");
   const [countryCode, setCountryCode] = useState("IN");
@@ -214,40 +235,64 @@ function BriefingPage() {
   const profileId = shown?.rows[0]?.jobProfileId ?? "";
   const aligned = pack?.rows.filter((row) => row.classification === "aligned").length ?? 0;
   const exceptions = pack?.rows.filter((row) => row.classification !== "aligned").length ?? 0;
+  const openRequests = (briefing?.requests ?? []).filter((request) => !request.acceptedAt).length;
+  const stamp = pack ? "Pack open" : shown?.status === "sealed" ? "Sealed" : "No open pack";
   return (
     <section data-screen="briefing">
-      <p className="eyebrow">Practice stewardship</p>
-      <h1>Briefing</h1>
-      <p>The open pack, the profile requests in this practice, and the latest readiness snapshot.</p>
+      <PageHead
+        eyebrow="Practice stewardship"
+        title="Briefing"
+        lede="The open pack, the profile requests in this practice, and the latest readiness snapshot."
+      />
       {problem ? <p className="gate-alert" role="alert">{problem}</p> : null}
-      <ul className="home-figures">
-        <li><b>{pack ? pack.rows.length : 0}</b><span>Profiles in the open pack</span></li>
-        <li><b>{aligned}</b><span>Aligned</span></li>
-        <li><b>{exceptions}</b><span>Exceptions</span></li>
-        <li><b>{briefing?.requests.length ?? 0}</b><span>Profile requests</span></li>
-      </ul>
-      {pack ? (
-        <article>
-          <h2>{pack.practiceCode}</h2>
-          <p>{pack.status === "sealed" ? "Sealed" : "Submitted"} by {pack.submittedBy}</p>
-          <ul className="gap-list">
-            {pack.rows.map((row) => (
-              <li key={row.rowId}>
-                <b>{row.profileName}</b>
-                <span>{labels[row.classification] ?? row.classification}{row.exceptionNote ? ` · ${row.exceptionNote}` : ""}</span>
-              </li>
-            ))}
-          </ul>
+      <div className="briefing-grid">
+        <article className="decision-letter">
+          <div className="letter-top">
+            <div>
+              <p className="eyebrow">Data practice</p>
+              <h2>{pack ? `${pack.rows.length} profiles in the open pack` : shown ? "The latest pack is sealed" : "No pack is open"}</h2>
+            </div>
+            <span className={pack ? "stamp" : "stamp ready"}>{stamp}</span>
+          </div>
+          <div className="letter-meta">
+            <div><small>Aligned</small><b>{aligned}</b></div>
+            <div><small>Exceptions</small><b>{exceptions}</b></div>
+            <div><small>Requests</small><b>{openRequests}</b></div>
+            <div><small>Snapshot</small><b>{snapshot ? formatAsOf(snapshot.asOf) : "None"}</b></div>
+          </div>
+          {pack ? (
+            <ul className="gap-list">
+              {pack.rows.map((row) => (
+                <li key={row.rowId}>
+                  <b>{row.profileName}</b>
+                  <span className={row.classification === "aligned" ? "chip mint" : "chip amber"}>{labels[row.classification] ?? row.classification}</span>
+                  {row.exceptionNote ? <span>{row.exceptionNote}</span> : null}
+                </li>
+              ))}
+            </ul>
+          ) : <p className="empty-note">{shown ? "The latest pack is sealed." : "No pack is open."}</p>}
+          <p>{pack ? `Submitted by ${pack.submittedBy}.` : "A sealed pack is not waiting on a decision."}</p>
         </article>
-      ) : shown ? <p>The latest pack is sealed.</p> : <p>No pack is open.</p>}
-      <h2>Readiness</h2>
-      {snapshot ? (
-        <>
-          <p data-as-of={snapshot.asOf}>As of {snapshot.asOf}</p>
-          <p>{snapshot.memberCount} members · {snapshot.measuredCount} measured · {snapshot.gapCount} below the bar · {snapshot.cohortCount} cohorts</p>
-          {snapshot.dirty ? <p role="status">This snapshot is stale. The last as-of still stands until the projection rewrites it.</p> : null}
-        </>
-      ) : <p>No practice snapshot has been written yet.</p>}
+        <aside className="margin">
+          <h2>Readiness</h2>
+          {snapshot ? (
+            <>
+              <p data-as-of={snapshot.asOf}>As of {formatAsOf(snapshot.asOf)}</p>
+              <div className="margin-stat"><strong>{snapshot.memberCount}</strong><span>Members</span></div>
+              <div className="margin-stat"><strong>{snapshot.measuredCount}</strong><span>Measured</span></div>
+              <div className="margin-stat"><strong>{snapshot.gapCount}</strong><span>Below the bar</span></div>
+              <div className="margin-stat"><strong>{snapshot.cohortCount}</strong><span>Cohorts</span></div>
+              {snapshot.dirty ? <p role="status">This snapshot is stale. The last as-of still stands until the projection rewrites it.</p> : null}
+            </>
+          ) : <p className="empty-note">No practice snapshot has been written yet.</p>}
+        </aside>
+      </div>
+      <div className="flowline">
+        <div className={pack ? "flowstep current" : "flowstep"}><small>1</small><b>{pack ? "Pack open" : shown ? "Pack sealed" : "No pack"}</b></div>
+        <div className="flowstep"><small>2</small><b>{openRequests === 0 ? "No open requests" : `${openRequests} profile requests`}</b></div>
+        <div className="flowstep"><small>3</small><b>Review room</b></div>
+        <div className="flowstep"><small>4</small><b>{snapshot ? "Snapshot stored" : "Snapshot missing"}</b></div>
+      </div>
       <SentForReview />
       <h2>Cohort</h2>
       <p>Name the people. A cohort is not everyone on the job profile.</p>
@@ -263,6 +308,7 @@ function BriefingPage() {
             memberIds: memberIds.split(",").map((id) => id.trim()).filter((id) => id.length > 0),
           })
             .then(() => load())
+            .then(() => notePracticeChange())
             .then(() => setProblem(null))
             .catch((error: unknown) => setProblem(error instanceof Error ? error.message : "That cohort was refused."))
             .finally(() => setPending(false));
@@ -283,18 +329,30 @@ function BriefingPage() {
 }
 
 function ReviewPage() {
+  useTitle("Review room");
   const { briefing, problem, setProblem, load } = useBriefing();
   const [pending, setPending] = useState(false);
   const pack = briefing?.pack ?? null;
   const aligned = pack?.rows.filter((row) => row.classification === "aligned") ?? [];
   const waiting = aligned.filter((row) => !row.reviewedAt);
+  const settled = pack ? pack.rows.filter((row) => (row.classification === "aligned" ? Boolean(row.reviewedAt) : Boolean(row.decision))).length : 0;
   return (
     <section data-screen="review">
-      <p className="eyebrow">Approval pack</p>
-      <h1>Review room</h1>
-      <p>Aligned profiles can be marked together. An exception stays on its own row.</p>
+      <div className="page-head">
+        <div>
+          <p className="eyebrow">Approval pack</p>
+          <h1>Review room</h1>
+          <p className="lede">Aligned profiles can be marked together. An exception stays on its own row, and a batch review does not include it.</p>
+        </div>
+        {pack ? (
+          <div className="seal-badge">
+            <strong>{settled}/{pack.rows.length}</strong>
+            <span>Rows settled</span>
+          </div>
+        ) : null}
+      </div>
       {problem ? <p className="gate-alert" role="alert">{problem}</p> : null}
-      {!pack ? <p>No pack is open.</p> : null}
+      {!pack ? <p className="empty-note">No pack is open.</p> : null}
       {pack ? (
         <>
           <div className="team-scroll">
@@ -306,7 +364,7 @@ function ReviewPage() {
                 {pack.rows.map((row) => (
                   <tr key={row.rowId}>
                     <td><strong>{row.profileName}</strong>{row.exceptionNote ? <span className="team-id">{row.exceptionNote}</span> : null}</td>
-                    <td>{labels[row.classification] ?? row.classification}</td>
+                    <td><span className={row.classification === "aligned" ? "chip mint" : "chip amber"}>{labels[row.classification] ?? row.classification}</span></td>
                     <td>{row.classification === "aligned" ? (row.reviewedAt ? "Reviewed" : "Clear") : (row.decision ? row.decision : "Needs a decision")}</td>
                   </tr>
                 ))}
@@ -323,6 +381,7 @@ function ReviewPage() {
                   setPending(true);
                   void markReviewed(pack.packId, waiting.map((row) => row.rowId))
                     .then(() => load())
+            .then(() => notePracticeChange())
                     .then(() => setProblem(null))
                     .catch((error: unknown) => setProblem(error instanceof Error ? error.message : "That batch was refused."))
                     .finally(() => setPending(false));
@@ -342,6 +401,7 @@ function ReviewPage() {
                 setPending(true);
                 void decideException(pack.packId, row.rowId, decision)
                   .then(() => load())
+            .then(() => notePracticeChange())
                   .then(() => setProblem(null))
                   .catch((error: unknown) => setProblem(error instanceof Error ? error.message : "That decision was refused."))
                   .finally(() => setPending(false));
@@ -381,6 +441,7 @@ function ExceptionDecision({ profileName, note, pending, onSubmit }: {
 }
 
 function SignOffPage() {
+  useTitle("Sign-off");
   const { briefing, problem, setProblem, load } = useBriefing();
   const [pending, setPending] = useState(false);
   const pack = briefing?.pack ?? null;
@@ -391,11 +452,13 @@ function SignOffPage() {
   const exceptionsDecided = exceptions.filter((row) => row.decision).length;
   return (
     <section data-screen="sign-off">
-      <p className="eyebrow">Practice attestation</p>
-      <h1>Sign-off</h1>
-      <p>Seal stays the command already built. It is refused while an exception has no recorded decision.</p>
+      <PageHead
+        eyebrow="Practice attestation"
+        title="Sign-off"
+        lede="Seal stays the command already built. It is refused while an exception has no recorded decision."
+      />
       {problem ? <p className="gate-alert" role="alert">{problem}</p> : null}
-      {!pack ? <p>No pack is open.</p> : null}
+      {!pack ? <p className="empty-note">No pack is open.</p> : null}
       {pack ? (
         <>
           <ul className="gap-list">
@@ -413,6 +476,7 @@ function SignOffPage() {
                   setPending(true);
                   void sealPack(pack.packId)
                     .then(() => load())
+            .then(() => notePracticeChange())
                     .then(() => setProblem(null))
                     .catch((error: unknown) => setProblem(error instanceof Error ? error.message : "That seal was refused."))
                     .finally(() => setPending(false));
@@ -429,16 +493,19 @@ function SignOffPage() {
 }
 
 function RequestsPage() {
+  useTitle("Profile requests");
   const { briefing, problem, setProblem, load } = useBriefing();
   const [pending, setPending] = useState(false);
   const requests = briefing?.requests ?? [];
   return (
     <section data-screen="practice-requests">
-      <p className="eyebrow">Practice demand</p>
-      <h1>Profile requests</h1>
-      <p>These are the requests for people in this practice. Accepting one does not publish a benchmark.</p>
+      <PageHead
+        eyebrow="Practice demand"
+        title="Profile requests"
+        lede="These are the requests for people in this practice. Accepting one does not publish a benchmark."
+      />
       {problem ? <p className="gate-alert" role="alert">{problem}</p> : null}
-      {requests.length === 0 ? <p>No profile request is waiting.</p> : null}
+      {requests.length === 0 ? <p className="empty-note">No profile request is waiting.</p> : null}
       <ul className="gap-list">
         {requests.map((request) => (
           <li key={request.requestId}>
@@ -453,6 +520,7 @@ function RequestsPage() {
                   setPending(true);
                   void acceptPracticeRequest(request.requestId, practiceCode)
                     .then(() => load())
+            .then(() => notePracticeChange())
                     .then(() => setProblem(null))
                     .catch((error: unknown) => setProblem(error instanceof Error ? error.message : "That request was refused."))
                     .finally(() => setPending(false));
@@ -469,13 +537,16 @@ function RequestsPage() {
 }
 
 function BaselinePage() {
+  useTitle("Baseline");
   const picture = usePicture(getPracticeBaseline);
   const heatmap = picture.value;
   return (
     <section data-screen="baseline">
-      <p className="eyebrow">Attested baseline</p>
-      <h1>Baseline</h1>
-      <p>Each cell is the attested target for a skill at a job level. The page reads the stored snapshot.</p>
+      <PageHead
+        eyebrow="Attested baseline"
+        title="Baseline"
+        lede="Each cell is the attested target for a skill at a job level. The page reads the stored snapshot."
+      />
       {picture.problem ? <p className="gate-alert" role="alert">{picture.problem}</p> : null}
       {heatmap?.asOf ? <p data-as-of={heatmap.asOf}>As of {formatAsOf(heatmap.asOf)}</p> : <p>No baseline snapshot has been written yet.</p>}
       {heatmap && heatmap.cells.length === 0 && heatmap.asOf ? <p>No attested targets are in this snapshot.</p> : null}
@@ -500,13 +571,16 @@ function BaselinePage() {
 }
 
 function ProgressionPage() {
+  useTitle("Progression");
   const picture = usePicture(getPracticeProgression);
   const progression = picture.value;
   return (
     <section data-screen="progression">
-      <p className="eyebrow">Paths in this practice</p>
-      <h1>Progression</h1>
-      <p>Path and step counts for people in the practice cohorts. The page reads the stored snapshot.</p>
+      <PageHead
+        eyebrow="Paths in this practice"
+        title="Progression"
+        lede="Path and step counts for people in the practice cohorts. The page reads the stored snapshot."
+      />
       {picture.problem ? <p className="gate-alert" role="alert">{picture.problem}</p> : null}
       {progression?.asOf ? <p data-as-of={progression.asOf}>As of {formatAsOf(progression.asOf)}</p> : <p>No progression snapshot has been written yet.</p>}
       {progression?.asOf ? (
@@ -521,13 +595,16 @@ function ProgressionPage() {
 }
 
 function MarketPage() {
+  useTitle("Market demand");
   const picture = usePicture(getPracticeMarket);
   const demand = picture.value ?? null;
   return (
     <section data-screen="market">
-      <p className="eyebrow">Published demand</p>
-      <h1>Market demand</h1>
-      <p>The published note and counts for this practice. A draft stays in the authoring zone until it is published.</p>
+      <PageHead
+        eyebrow="Published demand"
+        title="Market demand"
+        lede="The published note and counts for this practice. A draft stays in the authoring zone until it is published."
+      />
       {picture.problem ? <p className="gate-alert" role="alert">{picture.problem}</p> : null}
       {demand ? (
         <>
@@ -544,14 +621,17 @@ function MarketPage() {
 }
 
 function ReadinessPage() {
+  useTitle("Readiness");
   const picture = usePicture(getPracticePicture);
   const readiness = picture.value;
   const snapshot = readiness?.snapshot ?? null;
   return (
     <section data-screen="readiness">
-      <p className="eyebrow">This zone</p>
-      <h1>Readiness</h1>
-      <p>Talent-group and country cuts are snapshots held in this zone. The cross-zone total stays the sum of each zone&apos;s stored counts.</p>
+      <PageHead
+        eyebrow="This zone"
+        title="Readiness"
+        lede="Talent-group and country cuts are snapshots held in this zone. The cross-zone total stays the sum of each zone's stored counts."
+      />
       {picture.problem ? <p className="gate-alert" role="alert">{picture.problem}</p> : null}
       {snapshot ? (
         <>

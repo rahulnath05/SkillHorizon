@@ -8,10 +8,21 @@ import { PracticeHome } from "./practice";
 import { ManagerHome } from "./manager";
 import { CatalogueHome } from "./catalogue";
 import { AdminHome } from "./admin";
-import { initials, workspaceCopy } from "./workspaces";
+import { workspaceCopy } from "./workspaces";
 
-const signInLede = "Skills intelligence for the whole firm. Choose the account you want to sign in with. This chooses who you are. It does not choose a workspace.";
-const signInFoot = "Single sign-on against your organisation’s identity provider. SkillHorizon never holds a password.";
+type PersonaChoice = {
+  label: string;
+  subjectId: string;
+  workspace?: string;
+};
+
+const personaChoices: PersonaChoice[] = [
+  { label: "Employee", subjectId: "person-single" },
+  { label: "People manager", subjectId: "person-multi", workspace: "people_manager" },
+  { label: "L&D", subjectId: "person-ld" },
+  { label: "Competency lead", subjectId: "person-lead" },
+  { label: "Platform admin", subjectId: "person-admin" },
+];
 
 function destinationFor(shell: ShellState) {
   return resolveDestination(shell);
@@ -46,6 +57,7 @@ export function SignInPage() {
   const { shell, setShell, problem, reload } = useShell();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [current, setCurrent] = useState<string | null>(null);
 
   useEffect(() => {
     if (!shell?.authenticated || shell.status === "unauthenticated") return;
@@ -54,7 +66,7 @@ export function SignInPage() {
 
   if (problem && !shell) {
     return (
-      <Gate screen="sign-in" title="SkillHorizon" lede={signInLede} foot={signInFoot}>
+      <Gate screen="sign-in" title="SkillHorizon">
         <div className="gate-sso">
           <h2>Sign in</h2>
           <p className="sso-sub" role="alert">{problem}</p>
@@ -66,45 +78,52 @@ export function SignInPage() {
 
   if (!shell) return <Loading label="Loading SkillHorizon…" />;
 
-  async function onChoose(subjectId: string) {
+  const available = new Set(shell.identities.map((identity) => identity.subjectId));
+  const choices = personaChoices.filter((persona) => available.has(persona.subjectId));
+
+  async function onChoose(persona: PersonaChoice) {
     setPending(true);
+    setCurrent(persona.subjectId);
     setError(null);
     try {
-      const next = await signIn(subjectId);
+      let next = await signIn(persona.subjectId);
+      if (persona.workspace) next = await chooseWorkspace(persona.workspace);
       setShell(next);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Sign-in did not succeed.");
       setPending(false);
+      setCurrent(null);
     }
   }
 
   return (
-    <Gate screen="sign-in" title="SkillHorizon" lede={shell.localDevelopment ? signInLede : "Sign in with your work account to open your workspace."} foot={shell.localDevelopment ? signInFoot : undefined}>
+    <Gate screen="sign-in" title="SkillHorizon" lede={shell.localDevelopment ? undefined : "Sign in with your work account to open your workspace."}>
       {error ? <p className="gate-alert" role="alert">{error}</p> : null}
       {shell.localDevelopment ? (
-        shell.identities.length === 0 ? (
+        choices.length === 0 ? (
           <div className="gate-sso">
             <h2>Sign in</h2>
             <p className="sso-sub">No development identities are configured for the local identity provider.</p>
           </div>
         ) : (
-          <div className="gate-grid">
-            {shell.identities.map((identity) => (
-              <button
-                key={identity.subjectId}
-                type="button"
-                className="gate-card"
-                data-subject={identity.subjectId}
-                disabled={pending}
-                onClick={() => void onChoose(identity.subjectId)}
-              >
-                <span className="gate-av" aria-hidden="true">{initials(identity.displayName)}</span>
-                <span>
-                  <b>{identity.displayName}</b>
-                  <span>Legal entity {identity.legalEntityId}</span>
-                </span>
-              </button>
-            ))}
+          <div className="persona-panel">
+            <div className="persona-choices" role="group" aria-label="Personas" aria-busy={pending}>
+              {choices.map((persona) => {
+                const selected = current === persona.subjectId;
+                return (
+                  <button
+                    key={persona.subjectId}
+                    type="button"
+                    className={selected ? "persona-choice is-current" : "persona-choice"}
+                    aria-current={selected ? "true" : undefined}
+                    disabled={pending}
+                    onClick={() => void onChoose(persona)}
+                  >
+                    {persona.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )
       ) : (

@@ -54,6 +54,11 @@ builder.Services.AddSingleton(serviceProvider => new AssessmentBank(
     serviceProvider.GetRequiredService<NpgsqlDataSource>(),
     serviceProvider.GetRequiredService<CoreCaller>().Client));
 builder.Services.AddSingleton<ItemFixture>();
+builder.Services.AddSingleton(_ => new PersonaLearningFixture(
+    NpgsqlDataSource.Create(options.AssessmentConnectionString),
+    NpgsqlDataSource.Create(options.ProgressConnectionString),
+    options.DomainConnectionString,
+    options.EvidenceRoot));
 builder.Services.AddHealthChecks()
     .AddNpgSql(options.AssessmentConnectionString, name: "assessment-postgres")
     .AddNpgSql(options.ProgressConnectionString, name: "progress-postgres");
@@ -487,7 +492,13 @@ app.MapGet("/team/paths", async (HttpContext context, DevelopmentPaths paths, Ca
 });
 
 if (options.LoadLearningFixture)
+{
     app.Services.GetRequiredService<ItemFixture>().LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
+    app.Services.GetRequiredService<PersonaLearningFixture>().LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
+}
+
+if (args.Contains("--seed-only"))
+    return;
 
 app.Run();
 

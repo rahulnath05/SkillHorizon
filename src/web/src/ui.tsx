@@ -45,7 +45,7 @@ export function Gate({
 }: {
   screen: string;
   title: string;
-  lede: string;
+  lede?: string;
   foot?: ReactNode;
   children: ReactNode;
 }) {
@@ -57,7 +57,7 @@ export function Gate({
         <div className="gate-head">
           <span className="gate-mark" aria-hidden="true">S</span>
           <h1 id="main">{title}</h1>
-          <p>{lede}</p>
+          {lede ? <p>{lede}</p> : null}
         </div>
         {children}
         {foot ? <div className="gate-foot">{foot}</div> : null}

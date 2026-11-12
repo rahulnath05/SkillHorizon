@@ -314,3 +314,28 @@ function PanelPage() {
     </section>
   );
 }
+
+export function EnginePage() {
+  useTitle("Adaptive engine");
+  return (
+    <section data-screen="engine">
+      <p className="eyebrow">Assessment studio</p>
+      <h1>Adaptive engine</h1>
+      <p className="lede">This release has no engine. Item exposure, selection, and stopping rules are not stored, so this page does not show statistics.</p>
+      <div className="engine-layout">
+        <article>
+          <strong>Exposure</strong>
+          <p className="empty-note">No exposure record is available.</p>
+        </article>
+        <article>
+          <strong>Selection</strong>
+          <p className="empty-note">No item-selection trace is available.</p>
+        </article>
+        <article>
+          <strong>Stopping</strong>
+          <p className="empty-note">No stopping rule has been recorded.</p>
+        </article>
+      </div>
+    </section>
+  );
+}

@@ -9,10 +9,11 @@ import {
   type SittingItem,
   type SkillGap,
 } from "./api";
+import { PageHead } from "./frame";
 import { useTitle } from "./ui";
 
 export function Sitting() {
-  useTitle("Your assessment");
+  useTitle("Assessment");
   const [summary, setSummary] = useState<AssessmentSummary | null>(null);
   const [open, setOpen] = useState<OpenSitting | null>(null);
   const [rank, setRank] = useState<number | null>(null);
@@ -39,40 +40,60 @@ export function Sitting() {
   const shownGap = gap ?? (summary && summary.gap.length > 0 ? summary.gap : null);
 
   return (
-    <section className="sitting" aria-labelledby="sitting-title" data-screen="sitting">
-      <p className="eyebrow">Employee</p>
-      <h1 id="sitting-title">Your assessment</h1>
-      <p>Answer the items for the benchmark version this wave admitted. The sealed result records a proficiency for each skill.</p>
+    <section className="sitting" data-screen="sitting">
+      <PageHead
+        eyebrow="Employee · Assessment"
+        title="Your assessment"
+        lede="Answer the items for the benchmark version this wave admitted. The sealed result records a proficiency for each skill. This page does not invent a question bank."
+      />
       {problem ? (
         <p className="gate-alert" role="alert">
           {problem}
           <button type="button" className="team-retry" onClick={() => void load()}>Try again</button>
         </p>
       ) : null}
-      {shownGap ? <GapList gap={shownGap} /> : null}
-      {!shownGap && summary && !summary.wave ? <p>No assessment wave is open for you.</p> : null}
+      {shownGap ? (
+        <article className="surface-card">
+          <header>
+            <div>
+              <h2>Sealed gap</h2>
+              <p className="card-note">From the sealed result</p>
+            </div>
+          </header>
+          <GapList gap={shownGap} />
+        </article>
+      ) : null}
+      {!shownGap && summary && !summary.wave ? <p className="empty-note">No assessment wave is open for you.</p> : null}
       {!shownGap && summary?.wave && !open ? (
-        <button
-          type="button"
-          className="draft-publish"
-          disabled={pending}
-          onClick={() => {
-            setPending(true);
-            void startSitting(summary.wave!.waveId)
-              .then((next) => {
-                setOpen(next);
-                setRank(null);
-                setResponseBody("");
-                setProblem(null);
-              })
-              .catch((error: unknown) => {
-                setProblem(error instanceof Error ? error.message : "The sitting could not be opened.");
-              })
-              .finally(() => setPending(false));
-          }}
-        >
-          Start assessment
-        </button>
+        <article className="surface-card">
+          <header>
+            <div>
+              <h2>{summary.wave.profileName}</h2>
+              <p className="card-note">{summary.wave.population} admitted on this wave</p>
+            </div>
+          </header>
+          <button
+            type="button"
+            className="draft-publish"
+            disabled={pending}
+            onClick={() => {
+              setPending(true);
+              void startSitting(summary.wave!.waveId)
+                .then((next) => {
+                  setOpen(next);
+                  setRank(null);
+                  setResponseBody("");
+                  setProblem(null);
+                })
+                .catch((error: unknown) => {
+                  setProblem(error instanceof Error ? error.message : "The sitting could not be opened.");
+                })
+                .finally(() => setPending(false));
+            }}
+          >
+            Start assessment
+          </button>
+        </article>
       ) : null}
       {!shownGap && open?.item ? (
         <ItemForm
@@ -187,7 +208,6 @@ function ItemForm({
 function GapList({ gap }: { gap: SkillGap[] }) {
   return (
     <div>
-      <h2>Gap</h2>
       <ul className="gap-list">
         {gap.map((skill) => (
           <li key={skill.skillName}>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { NavLink, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import {
   exportPersonalMetadata,
   getAdminAudit,
@@ -7,8 +7,8 @@ import {
   getAdminGrants,
   getAdminIntegrations,
   getAdminModels,
-  getMalpracticeCases,
   getAdminSecurity,
+  getMalpracticeCases,
   grantWorkspace,
   openMalpracticeCase,
   revokeWorkspace,
@@ -21,17 +21,18 @@ import {
   type PersonalMetadata,
   type ZoneResidency,
 } from "./api";
+import { PageHead, PersonaFrame, type RailItem } from "./frame";
 import { formatAsOf, useTitle } from "./ui";
 import { workspaceCopy } from "./workspaces";
 
-const screens = [
-  { id: "access", label: "Access and roles" },
-  { id: "security", label: "Security" },
-  { id: "ai", label: "Responsible AI" },
-  { id: "audit", label: "Audit and retention" },
-  { id: "malpractice", label: "Malpractice" },
-  { id: "integrations", label: "Integrations" },
-  { id: "exports", label: "Exports" },
+const screens: RailItem[] = [
+  { id: "access", label: "Access and roles", icon: "✓", pill: "DR-10" },
+  { id: "security", label: "Security", icon: "◫", pill: "SP-01" },
+  { id: "ai", label: "Responsible AI", icon: "◇", pill: "SP-07" },
+  { id: "audit", label: "Audit and retention", icon: "≡", pill: "SP-10" },
+  { id: "malpractice", label: "Malpractice", icon: "→", pill: "SP-12" },
+  { id: "integrations", label: "Integrations", icon: "⇄", pill: "IN-01" },
+  { id: "exports", label: "Exports", icon: "↓", pill: "DR-11" },
 ];
 
 const workspaceCodes = [
@@ -45,31 +46,30 @@ const workspaceCodes = [
 export function AdminHome() {
   const { screen } = useParams();
   const current = screens.some((item) => item.id === screen) ? screen! : "access";
+  const page = screens.find((item) => item.id === current)?.label ?? "Access and roles";
   return (
-    <div className="home admin-home">
-      <nav className="home-nav" aria-label="Platform admin">
-        {screens.map((item) => (
-          <NavLink key={item.id} to={`/workspace/${item.id}`} aria-current={current === item.id ? "page" : undefined}>
-            {item.label}
-          </NavLink>
-        ))}
-      </nav>
-      <div className="home-main">
-        {current === "security" ? <SecurityPage /> : null}
-        {current === "ai" ? <ModelsPage /> : null}
-        {current === "audit" ? <AuditPage /> : null}
-        {current === "malpractice" ? <MalpracticePage /> : null}
-        {current === "integrations" ? <IntegrationsPage /> : null}
-        {current === "exports" ? <ExportsPage /> : null}
-        {current === "access" ? <AccessPage /> : null}
-      </div>
-    </div>
+    <PersonaFrame
+      label="Platform admin"
+      kicker="Trust and admin"
+      mark="PA"
+      page={page}
+      items={screens}
+      currentId={current}
+    >
+      {current === "security" ? <SecurityPage /> : null}
+      {current === "ai" ? <ModelsPage /> : null}
+      {current === "audit" ? <AuditPage /> : null}
+      {current === "malpractice" ? <MalpracticePage /> : null}
+      {current === "integrations" ? <IntegrationsPage /> : null}
+      {current === "exports" ? <ExportsPage /> : null}
+      {current === "access" ? <AccessPage /> : null}
+    </PersonaFrame>
   );
 }
 
 function AccessPage() {
   useTitle("Access and roles");
-  const [grants, setGrants] = useState<AdminGrant[]>([]);
+  const [grants, setGrants] = useState<AdminGrant[] | null>(null);
   const [subjectId, setSubjectId] = useState("");
   const [workspace, setWorkspace] = useState("employee");
   const [problem, setProblem] = useState<string | null>(null);
@@ -112,46 +112,97 @@ function AccessPage() {
       .finally(() => setPending(false));
   }
 
+  const people = grants ? new Set(grants.map((row) => row.subjectId)).size : null;
+  const held = grants ? new Set(grants.map((row) => row.workspace)).size : null;
+
   return (
     <section data-screen="access">
-      <p className="eyebrow">Trust and admin</p>
-      <h1>Access and roles</h1>
-      <p>Workspace grants are explicit. Granting or revoking one writes an audit row in the same change. This command cannot open another person’s sitting.</p>
+      <PageHead
+        eyebrow="DR-10 · role-based access"
+        title="Who holds a workspace"
+        lede="Workspace grants are explicit. Granting or revoking one writes an audit row in the same change. This command cannot open another person’s sitting."
+      />
       {problem ? <p className="gate-alert" role="alert">{problem}</p> : null}
-      {notice ? <p role="status">{notice}</p> : null}
-      {grants.length === 0 ? <p>No workspace grant is stored.</p> : (
-        <div className="team-scroll">
-          <table className="team-table">
-            <thead>
-              <tr>
-                <th>Person</th>
-                <th>Workspace</th>
-                <th>Granted</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {grants.map((row) => (
-                <tr key={row.grantId}>
-                  <td>{row.subjectId}</td>
-                  <td>{workspaceCopy(row.workspace).label}</td>
-                  <td>{formatAsOf(row.grantedAt)}</td>
-                  <td>
-                    <button
-                      type="button"
-                      className="draft-save"
-                      disabled={pending}
-                      onClick={() => revoke(row)}
-                    >
-                      Revoke {workspaceCopy(row.workspace).label}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {notice ? <p className="status-note" role="status">{notice}</p> : null}
+      <div className="stat-row">
+        <div className="stat-card">
+          <span className="kicker">Grants</span>
+          <strong>{grants ? grants.length : "—"}</strong>
+          <span className="hint">Stored for this zone</span>
         </div>
-      )}
+        <div className="stat-card">
+          <span className="kicker">People</span>
+          <strong>{people ?? "—"}</strong>
+          <span className="hint">Distinct sign-ins with a grant</span>
+        </div>
+        <div className="stat-card">
+          <span className="kicker">Workspaces in use</span>
+          <strong>{held ?? "—"}</strong>
+          <span className="hint">Of the five this zone can grant</span>
+        </div>
+        <div className="stat-card ink">
+          <span className="kicker">Workspaces defined</span>
+          <strong>{workspaceCodes.length}</strong>
+          <span className="hint">Roles this zone can grant</span>
+        </div>
+      </div>
+      <article className="surface-card">
+        <header>
+          <div>
+            <h2>Grants</h2>
+            <p className="card-note">The people and workspaces actually stored</p>
+          </div>
+        </header>
+        {!grants ? <p className="empty-note">The grants have not been loaded.</p> : null}
+        {grants && grants.length === 0 ? <p className="empty-note">No workspace grant is stored.</p> : null}
+        {grants && grants.length > 0 ? (
+          <div className="team-scroll">
+            <table className="team-table">
+              <thead>
+                <tr>
+                  <th>Person</th>
+                  <th>Workspace</th>
+                  <th>Granted</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {grants.map((row) => (
+                  <tr key={row.grantId}>
+                    <td>{row.subjectId}</td>
+                    <td>{workspaceCopy(row.workspace).label}</td>
+                    <td>{formatAsOf(row.grantedAt)}</td>
+                    <td>
+                      <button type="button" className="draft-save" disabled={pending} onClick={() => revoke(row)}>
+                        Revoke {workspaceCopy(row.workspace).label}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </article>
+      <article className="surface-card">
+        <header>
+          <div>
+            <h2>Workspaces this zone can grant</h2>
+            <p className="card-note">The catalogue of roles, not a sample of people</p>
+          </div>
+        </header>
+        <ul className="gap-list">
+          {workspaceCodes.map((code) => {
+            const copy = workspaceCopy(code);
+            return (
+              <li key={code}>
+                <b>{copy.label}</b>
+                <span>{copy.detail}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </article>
       <form className="task-close" onSubmit={grant}>
         <h2>Grant a workspace</h2>
         <label>
@@ -175,7 +226,7 @@ function AccessPage() {
 function SecurityPage() {
   useTitle("Security");
   const [residency, setResidency] = useState<ZoneResidency | null>(null);
-  const [connectors, setConnectors] = useState<ConnectorStatus[]>([]);
+  const [connectors, setConnectors] = useState<ConnectorStatus[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
 
   useEffect(() => {
@@ -189,37 +240,66 @@ function SecurityPage() {
 
   return (
     <section data-screen="security">
-      <p className="eyebrow">Trust and admin</p>
-      <h1>Security</h1>
-      <p>Zone residency and connector status are read from the control registry. This page does not change encryption keys.</p>
+      <PageHead
+        eyebrow="SP-01 · security"
+        title="Residency for this zone"
+        lede="Zone residency and connector status are read from the control registry. This page does not change encryption keys."
+      />
       {problem ? <p className="gate-alert" role="alert">{problem}</p> : null}
-      {residency ? (
-        <>
-          <h2>Residency</h2>
-          <p>{residency.displayName} · {residency.zoneId} · {residency.status}</p>
-          {residency.legalEntities.length === 0 ? <p>No legal entity is mapped to this zone.</p> : (
-            <div className="team-scroll">
-              <table className="team-table">
-                <thead>
-                  <tr>
-                    <th>Legal entity</th>
-                    <th>Name</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {residency.legalEntities.map((entity) => (
-                    <tr key={entity.legalEntityId}>
-                      <td>{entity.legalEntityId}</td>
-                      <td>{entity.displayName}</td>
+      <article className="surface-card">
+        <header>
+          <div>
+            <h2>Residency</h2>
+            <p className="card-note">{residency ? residency.status : "Not loaded"}</p>
+          </div>
+        </header>
+        {!residency && !problem ? <p className="empty-note">Residency has not been loaded.</p> : null}
+        {!residency && problem ? <p className="empty-note">Residency is not available.</p> : null}
+        {residency ? (
+          <>
+            <p>{residency.displayName} · {residency.zoneId} · {residency.status}</p>
+            {residency.legalEntities.length === 0 ? <p className="empty-note">No legal entity is mapped to this zone.</p> : (
+              <div className="team-scroll">
+                <table className="team-table">
+                  <thead>
+                    <tr>
+                      <th>Legal entity</th>
+                      <th>Name</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </>
-      ) : null}
-      <ConnectorTable connectors={connectors} />
+                  </thead>
+                  <tbody>
+                    {residency.legalEntities.map((entity) => (
+                      <tr key={entity.legalEntityId}>
+                        <td>{entity.legalEntityId}</td>
+                        <td>{entity.displayName}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        ) : null}
+      </article>
+      <article className="surface-card">
+        <header>
+          <div>
+            <h2>Connectors</h2>
+            <p className="card-note">Registered for this zone</p>
+          </div>
+        </header>
+        <ConnectorTable connectors={connectors} />
+      </article>
+      <article className="surface-card">
+        <header>
+          <div>
+            <h2>Certificates</h2>
+            <p className="card-note">Nothing is stored on this read</p>
+          </div>
+        </header>
+        <p className="empty-note">No certificate or penetration-test record is stored for this zone.</p>
+      </article>
+      <p className="callout"><i aria-hidden="true">i</i><span><b>Keys stay where they are.</b> This page has no control that rotates, revokes, or replaces an encryption key.</span></p>
     </section>
   );
 }
@@ -237,38 +317,49 @@ function ModelsPage() {
 
   return (
     <section data-screen="ai">
-      <p className="eyebrow">Trust and admin</p>
-      <h1>Responsible AI</h1>
-      <p>Models allowed to touch a score. The register is empty while no model is connected.</p>
+      <PageHead
+        eyebrow="SP-07 · responsible AI"
+        title="Models that can touch a score"
+        lede="The register lists a model only when one is connected. It stays empty until then. This page does not name a model that is not connected, and it does not change a key."
+      />
       {problem ? <p className="gate-alert" role="alert">{problem}</p> : null}
-      {models && models.length === 0 ? <p>No model is connected.</p> : null}
-      {models && models.length > 0 ? (
-        <div className="team-scroll">
-          <table className="team-table">
-            <thead>
-              <tr>
-                <th>Model</th>
-                <th>Purpose</th>
-              </tr>
-            </thead>
-            <tbody>
-              {models.map((model) => (
-                <tr key={model.modelId}>
-                  <td>{model.modelName}</td>
-                  <td>{model.purpose}</td>
+      <article className="surface-card">
+        <header>
+          <div>
+            <h2>Model register</h2>
+            <p className="card-note">Name and purpose only</p>
+          </div>
+        </header>
+        {!models && !problem ? <p className="empty-note">The register has not been loaded.</p> : null}
+        {models && models.length === 0 ? <p className="empty-note">No model is connected.</p> : null}
+        {models && models.length > 0 ? (
+          <div className="team-scroll">
+            <table className="team-table">
+              <thead>
+                <tr>
+                  <th>Model</th>
+                  <th>Purpose</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : null}
+              </thead>
+              <tbody>
+                {models.map((model) => (
+                  <tr key={model.modelId}>
+                    <td>{model.modelName}</td>
+                    <td>{model.purpose}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </article>
     </section>
   );
 }
 
 function AuditPage() {
   useTitle("Audit and retention");
-  const [records, setRecords] = useState<AuditRecord[]>([]);
+  const [records, setRecords] = useState<AuditRecord[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
 
   useEffect(() => {
@@ -279,41 +370,62 @@ function AuditPage() {
 
   return (
     <section data-screen="audit">
-      <p className="eyebrow">Trust and admin</p>
-      <h1>Audit and retention</h1>
-      <p>Opening this page writes an audit row for the read. A record names who did what. It does not contain response text or evidence bytes.</p>
+      <PageHead
+        eyebrow="SP-10 · audit and retention"
+        title="What was done, and to which record"
+        lede="Opening this page writes an audit row for the read. A record names who did what. It does not contain response text or evidence bytes."
+      />
       {problem ? <p className="gate-alert" role="alert">{problem}</p> : null}
-      {records.length === 0 ? <p>No audit record is stored.</p> : (
-        <div className="team-scroll">
-          <table className="team-table">
-            <thead>
-              <tr>
-                <th>When</th>
-                <th>Who</th>
-                <th>Action</th>
-                <th>Record</th>
-              </tr>
-            </thead>
-            <tbody>
-              {records.map((record) => (
-                <tr key={record.auditId}>
-                  <td>{formatAsOf(record.occurredAt)}</td>
-                  <td>{record.subjectId}</td>
-                  <td>{record.action}</td>
-                  <td>{record.recordType}</td>
+      <article className="surface-card">
+        <header>
+          <div>
+            <h2>Audit log</h2>
+            <p className="card-note">{records ? `${records.length} records` : "Not loaded"}</p>
+          </div>
+        </header>
+        {!records && !problem ? <p className="empty-note">The audit log has not been loaded.</p> : null}
+        {records && records.length === 0 ? <p className="empty-note">No audit record is stored.</p> : null}
+        {records && records.length > 0 ? (
+          <div className="team-scroll">
+            <table className="team-table">
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Who</th>
+                  <th>Action</th>
+                  <th>Record</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {records.map((record) => (
+                  <tr key={record.auditId}>
+                    <td>{formatAsOf(record.occurredAt)}</td>
+                    <td>{record.subjectId}</td>
+                    <td>{record.action}</td>
+                    <td>{record.recordType}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </article>
+      <article className="surface-card">
+        <header>
+          <div>
+            <h2>Retention</h2>
+            <p className="card-note">Not stored on this read</p>
+          </div>
+        </header>
+        <p className="empty-note">Retention periods are not stored on this read. The log above does not include response text or evidence bytes.</p>
+      </article>
     </section>
   );
 }
 
 function MalpracticePage() {
   useTitle("Malpractice");
-  const [cases, setCases] = useState<MalpracticeCase[]>([]);
+  const [cases, setCases] = useState<MalpracticeCase[] | null>(null);
   const [sittingId, setSittingId] = useState("");
   const [status, setStatus] = useState("open");
   const [problem, setProblem] = useState<string | null>(null);
@@ -345,35 +457,47 @@ function MalpracticePage() {
 
   return (
     <section data-screen="malpractice">
-      <p className="eyebrow">Trust and admin</p>
-      <h1>Malpractice</h1>
-      <p>A case stores a status and a sitting id. It does not copy the response.</p>
+      <PageHead
+        eyebrow="SP-12 · malpractice"
+        title="Cases on a sitting"
+        lede="A case stores a status and a sitting id. It does not copy the response."
+      />
       {problem ? <p className="gate-alert" role="alert">{problem}</p> : null}
-      {notice ? <p role="status">{notice}</p> : null}
-      {cases.length === 0 ? <p>No case is open.</p> : (
-        <div className="team-scroll">
-          <table className="team-table">
-            <thead>
-              <tr>
-                <th>Sitting</th>
-                <th>Status</th>
-                <th>Opened by</th>
-                <th>When</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cases.map((item) => (
-                <tr key={item.caseId}>
-                  <td className="mono">{item.sittingId}</td>
-                  <td>{item.status === "set_aside" ? "Set aside" : item.status === "explained" ? "Explained" : "Open"}</td>
-                  <td>{item.openedBy}</td>
-                  <td>{formatAsOf(item.openedAt)}</td>
+      {notice ? <p className="status-note" role="status">{notice}</p> : null}
+      <article className="surface-card">
+        <header>
+          <div>
+            <h2>Open cases</h2>
+            <p className="card-note">{cases ? `${cases.length} stored` : "Not loaded"}</p>
+          </div>
+        </header>
+        {!cases && !problem ? <p className="empty-note">The cases have not been loaded.</p> : null}
+        {cases && cases.length === 0 ? <p className="empty-note">No case is open.</p> : null}
+        {cases && cases.length > 0 ? (
+          <div className="team-scroll">
+            <table className="team-table">
+              <thead>
+                <tr>
+                  <th>Sitting</th>
+                  <th>Status</th>
+                  <th>Opened by</th>
+                  <th>When</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {cases.map((item) => (
+                  <tr key={item.caseId}>
+                    <td className="mono">{item.sittingId}</td>
+                    <td><span className={item.status === "open" ? "chip amber" : "chip quiet"}>{item.status === "set_aside" ? "Set aside" : item.status === "explained" ? "Explained" : "Open"}</span></td>
+                    <td>{item.openedBy}</td>
+                    <td>{formatAsOf(item.openedAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </article>
       <form className="task-close" onSubmit={open}>
         <h2>Open a case</h2>
         <label>
@@ -390,13 +514,14 @@ function MalpracticePage() {
         </label>
         <button type="submit" className="draft-publish" disabled={pending}>Store case</button>
       </form>
+      <p className="callout"><i aria-hidden="true">i</i><span><b>The response stays in the sitting.</b> This case does not store what the person wrote, and it does not change a score by itself.</span></p>
     </section>
   );
 }
 
 function IntegrationsPage() {
   useTitle("Integrations");
-  const [connectors, setConnectors] = useState<ConnectorStatus[]>([]);
+  const [connectors, setConnectors] = useState<ConnectorStatus[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
 
   useEffect(() => {
@@ -405,20 +530,44 @@ function IntegrationsPage() {
       .catch((error: unknown) => setProblem(error instanceof Error ? error.message : "The connector registry could not be loaded."));
   }, []);
 
+  const enabled = connectors?.filter((connector) => connector.enabled).length ?? null;
+
   return (
     <section data-screen="integrations">
-      <p className="eyebrow">Trust and admin</p>
-      <h1>Integrations</h1>
-      <p>Connectors registered for this zone.</p>
+      <PageHead
+        eyebrow="IN-01 · integrations"
+        title="Connectors registered for this zone"
+        lede="Only connectors the registry returns are listed. This page does not add a feed that is not registered."
+      />
       {problem ? <p className="gate-alert" role="alert">{problem}</p> : null}
-      <ConnectorTable connectors={connectors} />
+      <div className="stat-row cols-2">
+        <div className="stat-card">
+          <span className="kicker">Registered</span>
+          <strong>{connectors ? connectors.length : "—"}</strong>
+          <span className="hint">Connectors on this zone</span>
+        </div>
+        <div className="stat-card">
+          <span className="kicker">Enabled</span>
+          <strong>{enabled ?? "—"}</strong>
+          <span className="hint">Turned on in the registry</span>
+        </div>
+      </div>
+      <article className="surface-card">
+        <header>
+          <div>
+            <h2>Registry</h2>
+            <p className="card-note">Type, status, and endpoint</p>
+          </div>
+        </header>
+        <ConnectorTable connectors={connectors} />
+      </article>
     </section>
   );
 }
 
 function ExportsPage() {
   useTitle("Exports");
-  const [types, setTypes] = useState<ExportType[]>([]);
+  const [types, setTypes] = useState<ExportType[] | null>(null);
   const [subjectId, setSubjectId] = useState("");
   const [exported, setExported] = useState<PersonalMetadata | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -445,30 +594,42 @@ function ExportsPage() {
 
   return (
     <section data-screen="exports">
-      <p className="eyebrow">Trust and admin</p>
-      <h1>Exports</h1>
-      <p>Response text is not an export type. A personal metadata export writes an audit row in the same change.</p>
+      <PageHead
+        eyebrow="DR-11 · export"
+        title="Export types this zone offers"
+        lede="Response text is not an export type. A personal metadata export writes an audit row in the same change and returns the person’s record, not a sitting."
+      />
       {problem ? <p className="gate-alert" role="alert">{problem}</p> : null}
-      {types.length === 0 ? <p>No export type is listed.</p> : (
-        <div className="team-scroll">
-          <table className="team-table">
-            <thead>
-              <tr>
-                <th>Type</th>
-                <th>What it contains</th>
-              </tr>
-            </thead>
-            <tbody>
-              {types.map((type) => (
-                <tr key={type.code}>
-                  <td>{type.code}</td>
-                  <td>{type.description}</td>
+      <article className="surface-card">
+        <header>
+          <div>
+            <h2>Types</h2>
+            <p className="card-note">{types ? `${types.length} listed` : "Not loaded"}</p>
+          </div>
+        </header>
+        {!types && !problem ? <p className="empty-note">The export types have not been loaded.</p> : null}
+        {types && types.length === 0 ? <p className="empty-note">No export type is listed.</p> : null}
+        {types && types.length > 0 ? (
+          <div className="team-scroll">
+            <table className="team-table">
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>What it contains</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {types.map((type) => (
+                  <tr key={type.code}>
+                    <td>{type.code}</td>
+                    <td>{type.description}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </article>
       <form className="task-close" onSubmit={run}>
         <h2>Personal metadata</h2>
         <label>
@@ -478,21 +639,30 @@ function ExportsPage() {
         <button type="submit" className="draft-publish" disabled={pending}>Export personal metadata</button>
       </form>
       {exported ? (
-        <dl className="export-meta">
-          <div><dt>Person</dt><dd>{exported.subjectId}</dd></div>
-          <div><dt>Name</dt><dd>{exported.displayName}</dd></div>
-          <div><dt>Legal entity</dt><dd>{exported.legalEntityId}</dd></div>
-          <div><dt>Country</dt><dd>{exported.countryCode}</dd></div>
-          <div><dt>Employment</dt><dd>{exported.employmentStatus}</dd></div>
-          <div><dt>Workspaces</dt><dd>{exported.workspaces.length === 0 ? "None" : exported.workspaces.map((code) => workspaceCopy(code).label).join(", ")}</dd></div>
-        </dl>
+        <article className="surface-card">
+          <header>
+            <div>
+              <h2>Export</h2>
+              <p className="card-note">Personal metadata only</p>
+            </div>
+          </header>
+          <dl className="export-meta">
+            <div><dt>Person</dt><dd>{exported.subjectId}</dd></div>
+            <div><dt>Name</dt><dd>{exported.displayName}</dd></div>
+            <div><dt>Legal entity</dt><dd>{exported.legalEntityId}</dd></div>
+            <div><dt>Country</dt><dd>{exported.countryCode}</dd></div>
+            <div><dt>Employment</dt><dd>{exported.employmentStatus}</dd></div>
+            <div><dt>Workspaces</dt><dd>{exported.workspaces.length === 0 ? "None" : exported.workspaces.map((code) => workspaceCopy(code).label).join(", ")}</dd></div>
+          </dl>
+        </article>
       ) : null}
     </section>
   );
 }
 
-function ConnectorTable({ connectors }: { connectors: ConnectorStatus[] }) {
-  if (connectors.length === 0) return <p>No connector is registered for this zone.</p>;
+function ConnectorTable({ connectors }: { connectors: ConnectorStatus[] | null }) {
+  if (!connectors) return <p className="empty-note">Connectors have not been loaded.</p>;
+  if (connectors.length === 0) return <p className="empty-note">No connector is registered for this zone.</p>;
   return (
     <div className="team-scroll">
       <table className="team-table">
@@ -507,7 +677,7 @@ function ConnectorTable({ connectors }: { connectors: ConnectorStatus[] }) {
           {connectors.map((connector) => (
             <tr key={connector.connectorId}>
               <td>{connector.connectorType}</td>
-              <td>{connector.enabled ? "Enabled" : "Off"}</td>
+              <td><span className={connector.enabled ? "chip mint" : "chip quiet"}>{connector.enabled ? "Enabled" : "Off"}</span></td>
               <td>{connector.endpoint ?? "Not set"}</td>
             </tr>
           ))}
