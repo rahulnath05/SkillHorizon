@@ -9,7 +9,7 @@ public sealed record BankMark(Guid ItemId, string SkillCode, int Band, string Re
 
 public sealed record PanelExpert(Guid SmeId, string DomainName, string ExpertName, string Credentials);
 
-public sealed class AssessmentBank
+public sealed partial class AssessmentBank
 {
     private readonly NpgsqlDataSource _assessment;
     private readonly HttpClient _core;

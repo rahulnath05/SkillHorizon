@@ -73,6 +73,11 @@ public static class ShellEndpoints
         app.MapPost("/api/catalogue/submissions", (Delegate)SendDraft);
         app.MapGet("/api/catalogue/review", (Delegate)CatalogueReview);
         app.MapGet("/api/catalogue/overview", (Delegate)CatalogueOverview);
+        app.MapGet("/api/catalogue/boards", (Delegate)CatalogueBoards);
+        app.MapPost("/api/catalogue/profiles", (Delegate)CreateCatalogueProfile);
+        app.MapPost("/api/catalogue/taxonomy/activate", (Delegate)ActivateTaxonomySkill);
+        app.MapGet("/api/studio/skill-averages", (Delegate)StudioSkillAverages);
+        app.MapGet("/api/studio/measures", (Delegate)StudioMeasures);
         app.MapGet("/api/catalogue/market", (Delegate)CatalogueMarket);
         app.MapPost("/api/market/draft", (Delegate)SaveMarket);
         app.MapPost("/api/market/publish", (Delegate)PublishMarket);
@@ -294,6 +299,31 @@ public static class ShellEndpoints
 
     private static Task<IResult> CatalogueOverview(HttpContext http) =>
         Proxy(http, HttpMethod.Get, "catalogue/overview", null);
+
+    private static Task<IResult> CatalogueBoards(HttpContext http) =>
+        Proxy(http, HttpMethod.Get, "catalogue/boards", null);
+
+    private static async Task<IResult> CreateCatalogueProfile(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var body = await ReadBody(http).ConfigureAwait(false);
+        return await Proxy(http, HttpMethod.Post, "catalogue/profiles", body).ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> ActivateTaxonomySkill(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var body = await ReadBody(http).ConfigureAwait(false);
+        return await Proxy(http, HttpMethod.Post, "catalogue/taxonomy/activate", body).ConfigureAwait(false);
+    }
+
+    private static Task<IResult> StudioSkillAverages(HttpContext http) =>
+        StudioCore(http, HttpMethod.Get, "studio/skill-averages", null);
+
+    private static Task<IResult> StudioMeasures(HttpContext http) =>
+        Studio(http, HttpMethod.Get, "studio/measures", null);
 
     private static async Task<IResult> SaveBenchmark(HttpContext http)
     {

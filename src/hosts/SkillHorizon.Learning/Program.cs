@@ -54,6 +54,7 @@ builder.Services.AddSingleton(serviceProvider => new AssessmentBank(
     serviceProvider.GetRequiredService<NpgsqlDataSource>(),
     serviceProvider.GetRequiredService<CoreCaller>().Client));
 builder.Services.AddSingleton<ItemFixture>();
+builder.Services.AddSingleton<StudioMeasureFixture>();
 builder.Services.AddSingleton(_ => new PersonaLearningFixture(
     NpgsqlDataSource.Create(options.AssessmentConnectionString),
     NpgsqlDataSource.Create(options.ProgressConnectionString),
@@ -444,6 +445,17 @@ app.MapGet("/studio/marks", async (HttpContext context, AssessmentBank bank, Can
         return Results.Problem(title: "Studio refused", detail: exception.Message, statusCode: StatusCodes.Status403Forbidden);
     }
 });
+app.MapGet("/studio/measures", async (HttpContext context, AssessmentBank bank, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        return Results.Ok(await bank.MeasuresAsync(Incoming.Bearer(context), Incoming.Workspace(context), Incoming.Correlation(context), cancellationToken).ConfigureAwait(false));
+    }
+    catch (UnauthorizedAccessException exception)
+    {
+        return Results.Problem(title: "Studio refused", detail: exception.Message, statusCode: StatusCodes.Status403Forbidden);
+    }
+});
 app.MapGet("/studio/panel", async (HttpContext context, AssessmentBank bank, CancellationToken cancellationToken) =>
 {
     try
@@ -495,6 +507,7 @@ if (options.LoadLearningFixture)
 {
     app.Services.GetRequiredService<ItemFixture>().LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
     app.Services.GetRequiredService<PersonaLearningFixture>().LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
+    app.Services.GetRequiredService<StudioMeasureFixture>().LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
 }
 
 if (args.Contains("--seed-only"))

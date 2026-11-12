@@ -23,6 +23,9 @@ builder.Services.AddSingleton<RequireGrantFilter>();
 builder.Services.AddSingleton<StandardsFixture>();
 builder.Services.AddSingleton<LearningAdmissionFixture>();
 builder.Services.AddSingleton<PersonaContentFixture>();
+builder.Services.AddSingleton(services => new LdBoardFixture(
+    services.GetRequiredService<NpgsqlDataSource>(),
+    services.GetRequiredService<Microsoft.Extensions.Options.IOptions<SkillHorizonOptions>>().Value.ZoneId));
 builder.Services.AddHealthChecks()
     .AddNpgSql(options.DomainConnectionString, name: "domain-postgres")
     .AddRedis(options.Redis, name: "redis");
@@ -48,7 +51,10 @@ if (options.LoadStandardsFixture)
     app.Services.GetRequiredService<StandardsFixture>().LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
 app.Services.GetRequiredService<LearningAdmissionFixture>().LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
 if (options.LoadLearningFixture)
+{
     app.Services.GetRequiredService<PersonaContentFixture>().LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
+    app.Services.GetRequiredService<LdBoardFixture>().LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
+}
 if (args.Contains("--seed-only"))
     return;
 app.MapGet("/access/workspaces", async (HttpContext context, IGrantCheck grants, CancellationToken cancellationToken) =>

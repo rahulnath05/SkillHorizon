@@ -26,6 +26,9 @@ export function PersonaFrame({
   currentId,
   highlightId,
   studio,
+  crumb,
+  navLabel = "Screens",
+  railAction,
   children,
 }: {
   label: string;
@@ -42,6 +45,9 @@ export function PersonaFrame({
     currentId: string;
     items: StudioItem[];
   } | null;
+  crumb?: string;
+  navLabel?: string;
+  railAction?: ReactNode;
   children: ReactNode;
 }) {
   const today = new Date().toLocaleDateString("en-GB", {
@@ -62,7 +68,7 @@ export function PersonaFrame({
             <span>{kicker}</span>
           </div>
         </div>
-        <p className="persona-navlab">Screens</p>
+        <p className="persona-navlab">{navLabel}</p>
         <nav className="persona-nav">
           {items.map((item) => {
             const open = Boolean(studio && studio.parentId === item.id && studio.open);
@@ -104,6 +110,7 @@ export function PersonaFrame({
           })}
         </nav>
         <div className="persona-railfoot">
+          {railAction}
           <button
             type="button"
             className="mira-rail"
@@ -120,7 +127,7 @@ export function PersonaFrame({
       <div className="persona-main">
         <header className="persona-top">
           <p className="persona-crumb">
-            <b>{label}</b>
+            <b>{crumb ?? label}</b>
             {section ? <> / {section}</> : null}
             {" / "}
             {page}
