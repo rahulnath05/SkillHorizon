@@ -7,6 +7,7 @@ import { EmployeeHome } from "./home";
 import { PracticeHome } from "./practice";
 import { ManagerHome } from "./manager";
 import { CatalogueHome } from "./catalogue";
+import { AdminHome } from "./admin";
 import { initials, workspaceCopy } from "./workspaces";
 
 const signInLede = "Skills intelligence for the whole firm. Choose the account you want to sign in with. This chooses who you are. It does not choose a workspace.";
@@ -241,7 +242,8 @@ export function WorkspacePage() {
         {code === "people_manager" ? <ManagerHome /> : null}
         {code === "learning_and_development" ? <CatalogueHome /> : null}
         {code === "competency_lead" ? <PracticeHome /> : null}
-        {code === "employee" || code === "people_manager" || code === "learning_and_development" || code === "competency_lead" ? null : (
+        {code === "platform_admin" ? <AdminHome /> : null}
+        {code === "employee" || code === "people_manager" || code === "learning_and_development" || code === "competency_lead" || code === "platform_admin" ? null : (
         <div className="workspace-in">
           <p className="eyebrow">Active workspace</p>
           <h1>{copy.label}</h1>

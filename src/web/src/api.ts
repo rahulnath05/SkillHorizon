@@ -913,6 +913,124 @@ export async function publishBenchmark(benchmarkVersionId: string): Promise<void
   if (!response.ok) throw new Error(await readError(response));
 }
 
+export type AdminGrant = {
+  grantId: string;
+  subjectId: string;
+  workspace: string;
+  grantedAt: string;
+};
+
+export type ResidencyEntity = {
+  legalEntityId: string;
+  displayName: string;
+};
+
+export type ZoneResidency = {
+  zoneId: string;
+  displayName: string;
+  status: string;
+  legalEntities: ResidencyEntity[];
+};
+
+export type ConnectorStatus = {
+  connectorId: string;
+  connectorType: string;
+  enabled: boolean;
+  endpoint: string | null;
+};
+
+export type ModelRegistration = {
+  modelId: string;
+  modelName: string;
+  purpose: string;
+  connected: boolean;
+};
+
+export type AuditRecord = {
+  auditId: string;
+  subjectId: string;
+  action: string;
+  recordType: string;
+  recordId: string;
+  occurredAt: string;
+};
+
+export type MalpracticeCase = {
+  caseId: string;
+  sittingId: string;
+  status: string;
+  openedBy: string;
+  openedAt: string;
+};
+
+export type ExportType = {
+  code: string;
+  description: string;
+};
+
+export type PersonalMetadata = {
+  exportId: string;
+  subjectId: string;
+  displayName: string;
+  legalEntityId: string;
+  countryCode: string;
+  employmentStatus: string;
+  workspaces: string[];
+};
+
+export function getAdminGrants(): Promise<AdminGrant[]> {
+  return readOk<{ grants?: AdminGrant[] }>("/api/admin/grants").then((body) => body.grants ?? []);
+}
+
+export async function grantWorkspace(subjectId: string, workspace: string): Promise<void> {
+  const response = await postJson("/api/admin/grants", { subjectId, workspace });
+  if (!response.ok) throw new Error(await readError(response));
+}
+
+export async function revokeWorkspace(subjectId: string, workspace: string): Promise<void> {
+  const response = await postJson("/api/admin/grants/revoke", { subjectId, workspace });
+  if (!response.ok && response.status !== 204) throw new Error(await readError(response));
+}
+
+export function getAdminSecurity(): Promise<{ residency: ZoneResidency | null; connectors: ConnectorStatus[] }> {
+  return readOk<{ residency?: ZoneResidency | null; connectors?: ConnectorStatus[] }>("/api/admin/security").then((body) => ({
+    residency: body.residency ?? null,
+    connectors: body.connectors ?? [],
+  }));
+}
+
+export function getAdminModels(): Promise<ModelRegistration[]> {
+  return readOk<{ models?: ModelRegistration[] }>("/api/admin/models").then((body) => body.models ?? []);
+}
+
+export function getAdminAudit(): Promise<AuditRecord[]> {
+  return readOk<{ records?: AuditRecord[] }>("/api/admin/audit").then((body) => body.records ?? []);
+}
+
+export function getMalpracticeCases(): Promise<MalpracticeCase[]> {
+  return readOk<{ cases?: MalpracticeCase[] }>("/api/admin/malpractice").then((body) => body.cases ?? []);
+}
+
+export async function openMalpracticeCase(sittingId: string, status: string): Promise<void> {
+  const response = await postJson("/api/admin/malpractice", { sittingId, status });
+  if (!response.ok) throw new Error(await readError(response));
+}
+
+export function getAdminIntegrations(): Promise<ConnectorStatus[]> {
+  return readOk<{ connectors?: ConnectorStatus[] }>("/api/admin/integrations").then((body) => body.connectors ?? []);
+}
+
+export function getAdminExports(): Promise<ExportType[]> {
+  return readOk<{ types?: ExportType[] }>("/api/admin/exports").then((body) => body.types ?? []);
+}
+
+export async function exportPersonalMetadata(subjectId: string): Promise<PersonalMetadata> {
+  const response = await postJson("/api/admin/exports/personal", { subjectId });
+  if (!response.ok) throw new Error(await readError(response));
+  const body = (await response.json()) as PersonalMetadata;
+  return { ...body, workspaces: body.workspaces ?? [] };
+}
+
 export async function signOut(): Promise<void> {
   const response = await postJson("/api/signout", {});
   if (response.status !== 204) throw new Error(await readError(response));

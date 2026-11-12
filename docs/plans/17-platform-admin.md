@@ -2,7 +2,7 @@
 
 Parent: [Master plan](README.md)
 
-Status: `not-started`
+Status: `done`
 
 Depends on [16 Assessment operations](16-assessment-operations.md) being `done`.
 
@@ -20,10 +20,10 @@ Mira’s model client, a response-text export, changing encryption keys, and the
 
 | Step | Work | Status |
 |------|------|--------|
-| 17.1 | Access and roles lists workspace grants and can grant or revoke one. The audit row is written with the change. The command cannot open another person’s sitting | not-started |
-| 17.2 | Security page reads zone residency and connector status from the control registry. It does not change keys | not-started |
-| 17.3 | Responsible AI register lists models allowed to touch a score. The register is empty while no model is connected | not-started |
-| 17.4 | Audit page lists audit records and writes an audit row for that read. A record contains no response text and no evidence bytes | not-started |
-| 17.5 | Malpractice case stores a status and a sitting id. It does not copy the response | not-started |
-| 17.6 | Integrations page reads the connector registry for this zone | not-started |
-| 17.7 | Exports page lists export types. Response text is not one of them. A personal metadata export writes an audit row | not-started |
+| 17.1 | Access and roles lists workspace grants and can grant or revoke one. The audit row is written with the change. The command cannot open another person’s sitting | done |
+| 17.2 | Security page reads zone residency and connector status from the control registry. It does not change keys | done |
+| 17.3 | Responsible AI register lists models allowed to touch a score. The register is empty while no model is connected | done |
+| 17.4 | Audit page lists audit records and writes an audit row for that read. A record contains no response text and no evidence bytes | done |
+| 17.5 | Malpractice case stores a status and a sitting id. It does not copy the response | done |
+| 17.6 | Integrations page reads the connector registry for this zone | done |
+| 17.7 | Exports page lists export types. Response text is not one of them. A personal metadata export writes an audit row | done |

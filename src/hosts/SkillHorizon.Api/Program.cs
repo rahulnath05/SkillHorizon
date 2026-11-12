@@ -42,6 +42,7 @@ app.MapCatalogue();
 app.MapLearning();
 app.MapPractice();
 app.MapAggregates();
+app.MapAdmin();
 if (options.LoadStandardsFixture)
     app.Services.GetRequiredService<StandardsFixture>().LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
 app.Services.GetRequiredService<LearningAdmissionFixture>().LoadAsync(CancellationToken.None).GetAwaiter().GetResult();

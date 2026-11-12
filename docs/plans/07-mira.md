@@ -4,7 +4,7 @@ Parent: [Master plan](README.md)
 
 Status: `not-started`
 
-Depends on [17 Platform admin](17-platform-admin.md) being `done`. It is not the next slice. Slices 08 through 17 come first.
+Depends on [17 Platform admin](17-platform-admin.md) being `done`.
 
 ## Outcome
 

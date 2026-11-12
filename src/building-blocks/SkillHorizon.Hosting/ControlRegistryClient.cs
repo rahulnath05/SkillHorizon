@@ -123,5 +123,72 @@ public sealed class ControlRegistryClient : IZoneDirectory
         }
     }
 
+    public async Task<ZoneResidency?> ReadResidencyAsync(string zoneId, CancellationToken cancellationToken)
+    {
+        var key = "residency:" + zoneId;
+        if (_cache.TryGetValue(key, out ZoneResidency? cached))
+            return cached;
+
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "zones/" + Uri.EscapeDataString(zoneId) + "/residency");
+            await Sign(request, cancellationToken).ConfigureAwait(false);
+            using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            if (response.StatusCode == HttpStatusCode.NotFound)
+                return null;
+            if (!response.IsSuccessStatusCode)
+                throw new ZoneDirectoryUnavailableException($"The control registry returned {(int)response.StatusCode}.");
+
+            var body = await response.Content.ReadFromJsonAsync<ZoneResidency>(cancellationToken).ConfigureAwait(false)
+                ?? throw new ZoneDirectoryUnavailableException("The control registry returned an empty residency.");
+            _cache.Set(key, body, TimeSpan.FromSeconds(60));
+            return body;
+        }
+        catch (ZoneDirectoryUnavailableException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        {
+            throw new ZoneDirectoryUnavailableException("The control registry is unavailable.", exception);
+        }
+    }
+
+    public async Task<IReadOnlyList<ConnectorStatus>> ListConnectorsAsync(string zoneId, CancellationToken cancellationToken)
+    {
+        var key = "connectors:" + zoneId;
+        if (_cache.TryGetValue(key, out IReadOnlyList<ConnectorStatus>? cached) && cached is not null)
+            return cached;
+
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "zones/" + Uri.EscapeDataString(zoneId) + "/connectors");
+            await Sign(request, cancellationToken).ConfigureAwait(false);
+            using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+                throw new ZoneDirectoryUnavailableException($"The control registry returned {(int)response.StatusCode}.");
+
+            var body = await response.Content.ReadFromJsonAsync<List<ConnectorStatus>>(cancellationToken).ConfigureAwait(false)
+                ?? throw new ZoneDirectoryUnavailableException("The control registry returned an empty connector list.");
+            _cache.Set(key, body, TimeSpan.FromSeconds(60));
+            return body;
+        }
+        catch (ZoneDirectoryUnavailableException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        {
+            throw new ZoneDirectoryUnavailableException("The control registry is unavailable.", exception);
+        }
+    }
+
+    private async Task Sign(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        var registryKey = await _secrets.GetRequiredAsync(_options.RegistryKeySecretName, cancellationToken)
+            .ConfigureAwait(false);
+        request.Headers.TryAddWithoutValidation("X-Registry-Key", registryKey);
+    }
+
     private sealed record HrFeedBody(bool Enabled);
 }

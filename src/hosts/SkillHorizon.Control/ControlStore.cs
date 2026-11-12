@@ -1,4 +1,5 @@
 using Npgsql;
+using SkillHorizon.Hosting;
 
 namespace SkillHorizon.Control;
 
@@ -178,5 +179,69 @@ public sealed class ControlStore
         update.Parameters.AddWithValue(zoneId);
         var written = await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         return written == 1;
+    }
+
+    public async Task<ZoneResidency?> ReadResidencyAsync(string zoneId, CancellationToken cancellationToken)
+    {
+        string displayName;
+        string status;
+        await using (var zone = _dataSource.CreateCommand(
+            """
+            SELECT display_name, status
+            FROM zone.zone
+            WHERE zone_id = $1
+            """))
+        {
+            zone.Parameters.AddWithValue(zoneId);
+            await using var reader = await zone.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                return null;
+            displayName = reader.GetString(0);
+            status = reader.GetString(1);
+        }
+
+        var entities = new List<ResidencyEntity>();
+        await using (var command = _dataSource.CreateCommand(
+            """
+            SELECT legal_entity_id, display_name
+            FROM routing.legal_entity
+            WHERE zone_id = $1
+            ORDER BY legal_entity_id
+            """))
+        {
+            command.Parameters.AddWithValue(zoneId);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                entities.Add(new ResidencyEntity(reader.GetString(0), reader.GetString(1)));
+        }
+
+        return new ZoneResidency(zoneId, displayName, status, entities);
+    }
+
+    public async Task<IReadOnlyList<ConnectorStatus>?> ListConnectorsAsync(string zoneId, CancellationToken cancellationToken)
+    {
+        if (await ReadResidencyAsync(zoneId, cancellationToken).ConfigureAwait(false) is null)
+            return null;
+
+        var connectors = new List<ConnectorStatus>();
+        await using var command = _dataSource.CreateCommand(
+            """
+            SELECT connector_id, connector_type, enabled, endpoint
+            FROM integration.connector
+            WHERE zone_id = $1
+            ORDER BY connector_type, connector_id
+            """);
+        command.Parameters.AddWithValue(zoneId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            connectors.Add(new ConnectorStatus(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetBoolean(2),
+                reader.IsDBNull(3) ? null : reader.GetString(3)));
+        }
+
+        return connectors;
     }
 }

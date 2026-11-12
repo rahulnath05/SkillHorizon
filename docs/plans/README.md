@@ -4,9 +4,9 @@ Working checklists for the build. The short order is [the sequencing note](../ar
 
 ## Current
 
-Next slice: [17 Platform admin](17-platform-admin.md).
+Next slice: [07 Mira](07-mira.md).
 
-Slices 00 through 16 are done. Slice 17 builds the remaining reference screens, and the queries, commands, and tables behind them. [07 Mira](07-mira.md) stays `not-started` until 17 is done.
+Slices 00 through 17 are done. [07 Mira](07-mira.md) is the next child.
 
 ## Status rule
 
@@ -44,4 +44,4 @@ At the start of a build session, read `Current` and open that child. Do the firs
 | 14 Activation | [14-activation.md](14-activation.md) | done |
 | 15 Assessment bank | [15-assessment-bank.md](15-assessment-bank.md) | done |
 | 16 Assessment operations | [16-assessment-operations.md](16-assessment-operations.md) | done |
-| 17 Platform admin | [17-platform-admin.md](17-platform-admin.md) | not-started |
+| 17 Platform admin | [17-platform-admin.md](17-platform-admin.md) | done |
