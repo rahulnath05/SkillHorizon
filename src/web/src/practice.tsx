@@ -30,6 +30,10 @@ function greeting(name: string) {
   return `${hello}, ${name}.`;
 }
 
+function profileDone(row: { classification: string; reviewedAt?: string | null; decision?: string | null }) {
+  return row.classification === "aligned" ? Boolean(row.reviewedAt) : Boolean(row.decision);
+}
+
 function practiceLabel(code: string) {
   return code ? `${code.charAt(0).toUpperCase()}${code.slice(1)}` : "this practice";
 }
@@ -216,20 +220,18 @@ function BriefingPage() {
   const { shell } = useShell();
   const name = shell?.displayName?.trim() || "";
   useTitle(name ? greeting(name) : "Briefing");
-  const { briefing, problem, setProblem, load } = useBriefing();
-  const [pending, setPending] = useState(false);
+  const { briefing, problem } = useBriefing();
   const shown = briefing?.pack ?? null;
   const pack = shown?.status === "submitted" ? shown : null;
   const snapshot = briefing?.snapshot ?? null;
   const rows = shown?.rows ?? [];
   const aligned = rows.filter((row) => row.classification === "aligned").length;
   const exceptions = rows.filter((row) => row.classification !== "aligned").length;
-  const waiting = pack?.rows.filter((row) => row.classification === "aligned" && !row.reviewedAt) ?? [];
   const openRequests = (briefing?.requests ?? []).filter((request) => !request.acceptedAt).length;
   const practice = practiceLabel(shown?.practiceCode || practiceCode);
   const stamp = pack ? "Needs your judgment" : shown?.status === "sealed" ? "Sealed" : "No open pack";
-  const match = aligned === 1 ? "1 profile matches" : `${aligned} profiles match`;
-  const change = exceptions === 1 ? "1 needs a change" : `${exceptions} need a change`;
+  const done = rows.filter(profileDone).length;
+  const remaining = rows.length - done;
   return (
     <section data-screen="briefing">
       <PageHead
@@ -251,7 +253,7 @@ function BriefingPage() {
           </div>
           {shown ? (
             <div className="verdict">
-              <p><strong>{match} the last cycle.</strong> {change} before you sign off.</p>
+              <p><strong>{done} done.</strong> {remaining} remaining.</p>
             </div>
           ) : null}
           <div className="letter-meta">
@@ -263,24 +265,6 @@ function BriefingPage() {
           {shown ? (
             <div className="letter-actions">
               <Link className="fill-btn" to="/workspace/review">Enter the review room <span aria-hidden="true">→</span></Link>
-              {pack && waiting.length > 0 ? (
-                <button
-                  type="button"
-                  className="outline-btn"
-                  disabled={pending}
-                  onClick={() => {
-                    setPending(true);
-                    void markReviewed(pack.packId, waiting.map((row) => row.rowId))
-                      .then(() => load())
-                      .then(() => notePracticeChange())
-                      .then(() => setProblem(null))
-                      .catch((error: unknown) => setProblem(error instanceof Error ? error.message : "That batch was refused."))
-                      .finally(() => setPending(false));
-                  }}
-                >
-                  Approve {waiting.length} clear now
-                </button>
-              ) : null}
             </div>
           ) : null}
         </article>
@@ -312,7 +296,8 @@ function ReviewPage() {
   useTitle("Review room");
   const { briefing, problem, setProblem, load } = useBriefing();
   const [pending, setPending] = useState(false);
-  const [filter, setFilter] = useState<"all" | "clear" | "exception">("all");
+  const [filter, setFilter] = useState<"all" | "done" | "remaining">("all");
+  const [picked, setPicked] = useState<string[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [composer, setComposer] = useState<null | "counter" | "note">(null);
   const [composerText, setComposerText] = useState("");
@@ -325,8 +310,8 @@ function ReviewPage() {
   const aligned = rows.filter((row) => row.classification === "aligned");
   const exceptions = rows.filter((row) => row.classification !== "aligned");
   const waiting = aligned.filter((row) => !row.reviewedAt);
-  const settled = rows.filter((row) => (row.classification === "aligned" ? Boolean(row.reviewedAt) : Boolean(row.decision))).length;
-  const visible = rows.filter((row) => filter === "all" || (filter === "clear" ? row.classification === "aligned" : row.classification !== "aligned"));
+  const settled = rows.filter(profileDone).length;
+  const visible = rows.filter((row) => filter === "all" || (filter === "done" ? profileDone(row) : !profileDone(row)));
   const open = rows.find((row) => row.rowId === openId) ?? null;
   const openProfileId = open?.jobProfileId ?? "";
   const closeDrawer = () => {
@@ -388,35 +373,41 @@ function ReviewPage() {
       {pack ? (
         <>
           <div className="review-control">
-            <div className="filters" role="group" aria-label="Profile filter">
+            <div className="filters" role="group" aria-label="Profile status">
               <button type="button" aria-pressed={filter === "all"} onClick={() => setFilter("all")}>All {rows.length}</button>
-              <button type="button" aria-pressed={filter === "clear"} onClick={() => setFilter("clear")}>Clear {aligned.length}</button>
-              <button type="button" aria-pressed={filter === "exception"} onClick={() => setFilter("exception")}>Needs judgment {exceptions.length}</button>
+              <button type="button" aria-pressed={filter === "done"} onClick={() => setFilter("done")}>Done {settled}</button>
+              <button type="button" aria-pressed={filter === "remaining"} onClick={() => setFilter("remaining")}>Remaining {rows.length - settled}</button>
             </div>
             <span className="control-note">Proposed anchors sit on the row. Open it for the brief and the full list.</span>
             <Link className="outline-btn" to="/workspace/requests">+ New market profile</Link>
-            {pack.status === "submitted" && waiting.length > 0 ? (
+            {pack.status === "submitted" ? (
               <button
                 type="button"
                 className="fill-btn"
-                disabled={pending}
+                disabled={pending || picked.length === 0}
                 onClick={() => {
+                  const chosen = rows.filter((row) => picked.includes(row.rowId));
+                  const approvable = chosen.filter((row) => row.classification === "aligned" && !row.reviewedAt);
+                  if (approvable.length === 0) {
+                    setProblem("Approve applies to a remaining aligned profile. An exception is decided on its row.");
+                    return;
+                  }
                   setPending(true);
-                  void markReviewed(pack.packId, waiting.map((row) => row.rowId))
+                  void markReviewed(pack.packId, approvable.map((row) => row.rowId))
                     .then(() => load())
                     .then(() => notePracticeChange())
-                    .then(() => setProblem(null))
-                    .catch((error: unknown) => setProblem(error instanceof Error ? error.message : "That batch was refused."))
+                    .then(() => { setPicked([]); setProblem(null); })
+                    .catch((error: unknown) => setProblem(error instanceof Error ? error.message : "That approval was refused."))
                     .finally(() => setPending(false));
                 }}
               >
-                Approve {waiting.length} clear
+                Approve
               </button>
             ) : null}
           </div>
           <div className="pack">
             <div className="pack-columns">
-              <span>Profile</span><span>Decision anchors · proposed benchmark</span><span>Market signal</span><span>Status</span>
+              <span className="sr-only">Select</span><span>Profile</span><span>Decision anchors · proposed benchmark</span><span>Market signal</span><span>Status</span>
             </div>
             {[...visible.reduce((groups, row) => {
               const band = lenses[row.jobProfileId]?.band || "Practice";
@@ -434,13 +425,25 @@ function ReviewPage() {
                   const preview = (detail?.targets ?? []).slice(0, 3);
                   const extra = (detail?.targets.length ?? 0) - preview.length;
                   const family = [detail?.familyName, detail?.band].filter((item) => item && item.length > 0).join(" · ") || row.profileCode;
+                  const checked = picked.includes(row.rowId);
                   return (
-                    <button
+                    <div
                       key={row.rowId}
-                      type="button"
                       className={`profile-row${exception ? " exception" : ""}${signed ? " signed" : ""}`}
-                      onClick={() => { setComposer(null); setComposerText(""); setDrawerNote(""); setOpenId(row.rowId); }}
                     >
+                      <label className="row-check">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          aria-label={`Select ${row.profileName}`}
+                          onChange={() => setPicked((current) => current.includes(row.rowId) ? current.filter((id) => id !== row.rowId) : [...current, row.rowId])}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="profile-open"
+                        onClick={() => { setComposer(null); setComposerText(""); setDrawerNote(""); setOpenId(row.rowId); }}
+                      >
                       <span className="profile-main">
                         <span className="profile-index">{signed ? "✓" : String(index + 1).padStart(2, "0")}</span>
                         <span>
@@ -460,7 +463,8 @@ function ReviewPage() {
                       </span>
                       <span className={row.classification === "aligned" ? "chip mint" : "chip amber"}>{labels[row.classification] ?? row.classification}</span>
                       <span className={signed && !exception ? "chip mint" : exception && !signed ? "chip amber" : "chip quiet"}>{signed ? (exception ? "Decided" : "Signed") : exception ? "Review" : "Clear"}</span>
-                    </button>
+                      </button>
+                    </div>
                   );
                 })}
               </div>
@@ -469,7 +473,7 @@ function ReviewPage() {
           {showAfter ? (
             <div className="batch-after">
               <p><b>{aligned.length} aligned {aligned.length === 1 ? "profile" : "profiles"} moved together.</b> {exceptions.filter((row) => !row.decision).length} still need a decision.</p>
-              <button type="button" className="fill-btn" onClick={() => setFilter("exception")}>Review exceptions</button>
+              <button type="button" className="fill-btn" onClick={() => setFilter("remaining")}>Show remaining</button>
             </div>
           ) : null}
         </>

@@ -2869,8 +2869,9 @@ button { cursor: pointer; }
   .req-queue li { grid-template-columns: 1fr; }
   .req-hero { padding: 36px 22px 32px; }
   .pack-columns { display: none; }
-  .profile-row { grid-template-columns: 1fr auto; }
-  .profile-row .targets { grid-column: 1 / -1; }
+  .profile-row { grid-template-columns: 44px minmax(0, 1fr); }
+  .profile-open { grid-template-columns: 1fr auto; }
+  .profile-open .targets { grid-column: 1 / -1; }
 }
 
 .req-queue .request-skills {
@@ -2944,7 +2945,7 @@ button { cursor: pointer; }
 .pack-columns,
 .profile-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1.15fr) minmax(0, 1.8fr) 110px 92px;
+  grid-template-columns: 44px minmax(180px, 1.15fr) minmax(0, 1.8fr) 110px 92px;
   gap: 12px;
   align-items: center;
   padding: 14px 18px;
@@ -2965,6 +2966,37 @@ button { cursor: pointer; }
   min-height: 72px;
   border: 0;
   border-top: 1px solid var(--persona-line);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.row-check {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.row-check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--persona-forest);
+}
+
+.profile-open {
+  display: grid;
+  grid-column: 2 / -1;
+  grid-template-columns: minmax(180px, 1.15fr) minmax(0, 1.8fr) 110px 92px;
+  gap: 12px;
+  align-items: center;
+  min-height: 72px;
+  margin: -14px 0;
+  padding: 14px 0;
+  border: 0;
   background: transparent;
   color: inherit;
   text-align: left;
@@ -3344,4 +3376,182 @@ button { cursor: pointer; }
   border: 0;
   background: transparent;
   box-shadow: none;
+}
+
+[data-screen="workspace"] .progress-strip,
+[data-screen="workspace"] .composer,
+[data-screen="taxonomy"] .composer,
+[data-screen="taxonomy"] .stat-row > div {
+  border: 1px solid rgba(23, 34, 31, 0.08);
+  border-radius: 18px;
+  background: var(--surface);
+}
+
+[data-screen="workspace"] .progress-strip {
+  margin-bottom: 18px;
+  padding: 16px 18px;
+}
+
+[data-screen="workspace"] .progress-strip strong,
+[data-screen="workspace"] .composer-bar strong,
+[data-screen="workspace"] .save-copy strong,
+[data-screen="taxonomy"] .stat-row strong,
+[data-screen="taxonomy"] .skill-detail-head h2,
+[data-screen="taxonomy"] .taxonomy-detail h3,
+[data-screen="workspace"] article.profile-card h2 {
+  font-family: "Manrope", system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+[data-screen="workspace"] .composer > aside,
+[data-screen="taxonomy"] .composer > aside {
+  padding: 20px 18px 22px;
+  background: var(--persona-paper-2);
+}
+
+[data-screen="workspace"] .card-note,
+[data-screen="taxonomy"] .card-note,
+[data-screen="taxonomy"] .section-kicker,
+[data-screen="workspace"] .profile-card .card-title span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+[data-screen="workspace"] .picker,
+[data-screen="taxonomy"] .tax-skill {
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+[data-screen="workspace"] .picker strong,
+[data-screen="taxonomy"] .tax-skill strong {
+  font-family: "Manrope", system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+[data-screen="workspace"] .picker small,
+[data-screen="taxonomy"] .tax-skill-meta,
+[data-screen="workspace"] .profile-card header p,
+[data-screen="workspace"] .level-row small,
+[data-screen="taxonomy"] .skill-detail-head p,
+[data-screen="taxonomy"] .level-meaning p {
+  margin: 0;
+  max-width: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+[data-screen="workspace"] article.profile-card {
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgba(23, 34, 31, 0.08);
+  border-radius: 18px;
+  box-shadow: none;
+}
+
+[data-screen="workspace"] article.profile-card > header {
+  display: block;
+  margin: 0;
+  padding: 22px 22px 16px;
+  border-bottom: 0;
+}
+
+[data-screen="workspace"] article.profile-card h2 {
+  margin: 10px 0 0;
+  font-size: 18px;
+}
+
+[data-screen="workspace"] .level-row {
+  padding: 14px 22px;
+}
+
+[data-screen="workspace"] .profile-card footer {
+  padding: 16px 22px;
+  background: var(--persona-paper-2);
+}
+
+[data-screen="workspace"] .card-row {
+  padding: 22px;
+}
+
+[data-screen="workspace"] .save-bar,
+[data-screen="workspace"] .composer-bar {
+  padding: 14px 18px;
+}
+
+[data-screen="taxonomy"] .stat-row > div {
+  padding: 18px 20px;
+}
+
+[data-screen="taxonomy"] .stat-row .kicker {
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+}
+
+[data-screen="taxonomy"] .taxonomy-detail {
+  padding: 32px 36px 36px;
+}
+
+[data-screen="taxonomy"] .skill-detail-head h2 {
+  font-size: 30px;
+  letter-spacing: -0.03em;
+}
+
+[data-screen="taxonomy"] .use-chip {
+  border: 1px solid rgba(23, 34, 31, 0.08);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+[data-screen="taxonomy"] .use-chip span {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+[data-screen="workspace"] .picker.is-on,
+[data-screen="taxonomy"] .tax-skill.is-on {
+  border-color: rgba(91, 152, 137, 0.45);
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(23, 34, 31, 0.05);
+}
+
+[data-screen="workspace"] .code-chip,
+[data-screen="taxonomy"] .code-chip {
+  margin-right: 6px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: var(--persona-paper-2);
+  color: var(--muted);
+  font-family: "Manrope", system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+
+[data-screen="workspace"] .profile-card .close-x {
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(23, 34, 31, 0.08);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+}
+
+[data-screen="workspace"] .filter-row button.is-on,
+[data-screen="taxonomy"] .filter-row button.is-on {
+  background: var(--persona-forest);
 }
