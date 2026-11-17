@@ -63,6 +63,7 @@ builder.Services.AddSingleton(_ => new PersonaLearningFixture(
 builder.Services.AddHealthChecks()
     .AddNpgSql(options.AssessmentConnectionString, name: "assessment-postgres")
     .AddNpgSql(options.ProgressConnectionString, name: "progress-postgres");
+builder.AddDevelopmentSwagger();
 
 var app = builder.Build();
 if (options.MigrateOnStartup)
@@ -71,6 +72,7 @@ if (options.MigrateOnStartup)
     SchemaMigrator.ApplyProgress(options.ProgressConnectionString);
 }
 
+app.UseDevelopmentSwagger();
 app.UseSkillHorizonRequestLogging();
 app.MapHealthChecks("/health");
 app.MapPost("/sittings", async (HttpContext context, AssessmentSession sessions, CancellationToken cancellationToken) =>

@@ -29,12 +29,14 @@ builder.Services.AddSingleton(services => new LdBoardFixture(
 builder.Services.AddHealthChecks()
     .AddNpgSql(options.DomainConnectionString, name: "domain-postgres")
     .AddRedis(options.Redis, name: "redis");
+builder.AddDevelopmentSwagger();
 
 var app = builder.Build();
 _ = app.Services.GetRequiredService<IIdentityProvider>();
 if (options.MigrateOnStartup)
     SchemaMigrator.ApplyDomain(options.DomainConnectionString);
 
+app.UseDevelopmentSwagger();
 app.UseSkillHorizonRequestLogging();
 app.UseSkillHorizonAuthentication();
 app.UseSkillHorizonZoneGate();

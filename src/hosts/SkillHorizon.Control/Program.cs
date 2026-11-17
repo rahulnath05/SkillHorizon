@@ -23,11 +23,13 @@ builder.Services.AddSingleton<ControlStore>();
 builder.Services.AddHttpClient("zones", client => client.Timeout = TimeSpan.FromSeconds(5));
 builder.Services.AddHealthChecks()
     .AddNpgSql(options.ControlConnectionString, name: "control-postgres");
+builder.AddDevelopmentSwagger();
 
 var app = builder.Build();
 if (options.MigrateOnStartup)
     SchemaMigrator.ApplyControl(options.ControlConnectionString);
 
+app.UseDevelopmentSwagger();
 app.UseSkillHorizonRequestLogging();
 app.Use(async (context, next) =>
 {
