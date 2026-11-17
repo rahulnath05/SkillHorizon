@@ -73,6 +73,11 @@ public static class ShellEndpoints
         app.MapPost("/api/catalogue/submissions", (Delegate)SendDraft);
         app.MapGet("/api/catalogue/review", (Delegate)CatalogueReview);
         app.MapGet("/api/catalogue/overview", (Delegate)CatalogueOverview);
+        app.MapGet("/api/catalogue/boards", (Delegate)CatalogueBoards);
+        app.MapPost("/api/catalogue/profiles", (Delegate)CreateCatalogueProfile);
+        app.MapPost("/api/catalogue/taxonomy/activate", (Delegate)ActivateTaxonomySkill);
+        app.MapGet("/api/studio/skill-averages", (Delegate)StudioSkillAverages);
+        app.MapGet("/api/studio/measures", (Delegate)StudioMeasures);
         app.MapGet("/api/catalogue/market", (Delegate)CatalogueMarket);
         app.MapPost("/api/market/draft", (Delegate)SaveMarket);
         app.MapPost("/api/market/publish", (Delegate)PublishMarket);
@@ -93,6 +98,17 @@ public static class ShellEndpoints
         app.MapPost("/api/practice/requests/{requestId:guid}/accept", (Delegate)AcceptPracticeRequest);
         app.MapPost("/api/cohorts", (Delegate)CreateCohort);
         app.MapGet("/api/practice/readiness", (Delegate)PracticeReadiness);
+        app.MapGet("/api/admin/grants", (Delegate)AdminGrants);
+        app.MapPost("/api/admin/grants", (Delegate)AdminGrant);
+        app.MapPost("/api/admin/grants/revoke", (Delegate)AdminRevoke);
+        app.MapGet("/api/admin/security", (Delegate)AdminSecurity);
+        app.MapGet("/api/admin/models", (Delegate)AdminModels);
+        app.MapGet("/api/admin/audit", (Delegate)AdminAudit);
+        app.MapGet("/api/admin/malpractice", (Delegate)AdminCases);
+        app.MapPost("/api/admin/malpractice", (Delegate)AdminCase);
+        app.MapGet("/api/admin/integrations", (Delegate)AdminIntegrations);
+        app.MapGet("/api/admin/exports", (Delegate)AdminExports);
+        app.MapPost("/api/admin/exports/personal", (Delegate)AdminExport);
         app.MapGet("/signin/oidc", (Delegate)Oidc);
         app.MapFallback(ServeClient);
         return app;
@@ -283,6 +299,31 @@ public static class ShellEndpoints
 
     private static Task<IResult> CatalogueOverview(HttpContext http) =>
         Proxy(http, HttpMethod.Get, "catalogue/overview", null);
+
+    private static Task<IResult> CatalogueBoards(HttpContext http) =>
+        Proxy(http, HttpMethod.Get, "catalogue/boards", null);
+
+    private static async Task<IResult> CreateCatalogueProfile(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var body = await ReadBody(http).ConfigureAwait(false);
+        return await Proxy(http, HttpMethod.Post, "catalogue/profiles", body).ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> ActivateTaxonomySkill(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var body = await ReadBody(http).ConfigureAwait(false);
+        return await Proxy(http, HttpMethod.Post, "catalogue/taxonomy/activate", body).ConfigureAwait(false);
+    }
+
+    private static Task<IResult> StudioSkillAverages(HttpContext http) =>
+        StudioCore(http, HttpMethod.Get, "studio/skill-averages", null);
+
+    private static Task<IResult> StudioMeasures(HttpContext http) =>
+        Studio(http, HttpMethod.Get, "studio/measures", null);
 
     private static async Task<IResult> SaveBenchmark(HttpContext http)
     {
@@ -817,6 +858,74 @@ public static class ShellEndpoints
             return null;
         var bearer = await Bearer(http, assertion).ConfigureAwait(false);
         return string.IsNullOrWhiteSpace(bearer) ? null : (bearer, assertion);
+    }
+
+    private static Task<IResult> AdminGrants(HttpContext http) =>
+        Admin(http, HttpMethod.Get, "admin/grants", null);
+
+    private static async Task<IResult> AdminGrant(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        return await Admin(http, HttpMethod.Post, "commands/admin/grants", await ReadBody(http).ConfigureAwait(false)).ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> AdminRevoke(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        return await Admin(http, HttpMethod.Post, "commands/admin/grants/revoke", await ReadBody(http).ConfigureAwait(false)).ConfigureAwait(false);
+    }
+
+    private static Task<IResult> AdminSecurity(HttpContext http) =>
+        Admin(http, HttpMethod.Get, "admin/security", null);
+
+    private static Task<IResult> AdminModels(HttpContext http) =>
+        Admin(http, HttpMethod.Get, "admin/models", null);
+
+    private static Task<IResult> AdminAudit(HttpContext http) =>
+        Admin(http, HttpMethod.Get, "admin/audit", null);
+
+    private static Task<IResult> AdminCases(HttpContext http) =>
+        Admin(http, HttpMethod.Get, "admin/malpractice", null);
+
+    private static async Task<IResult> AdminCase(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        return await Admin(http, HttpMethod.Post, "commands/admin/malpractice", await ReadBody(http).ConfigureAwait(false)).ConfigureAwait(false);
+    }
+
+    private static Task<IResult> AdminIntegrations(HttpContext http) =>
+        Admin(http, HttpMethod.Get, "admin/integrations", null);
+
+    private static Task<IResult> AdminExports(HttpContext http) =>
+        Admin(http, HttpMethod.Get, "admin/exports", null);
+
+    private static async Task<IResult> AdminExport(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        return await Admin(http, HttpMethod.Post, "commands/admin/exports/personal", await ReadBody(http).ConfigureAwait(false)).ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> Admin(HttpContext http, HttpMethod method, string path, string? json)
+    {
+        http.Response.Headers.CacheControl = "no-store";
+        if (http.User.Identity?.IsAuthenticated != true)
+            return Results.Unauthorized();
+        if (!string.Equals(http.User.FindFirst("active_workspace")?.Value, "platform_admin", StringComparison.Ordinal))
+            return Results.Json(new { error = "Choose the platform admin workspace first." }, statusCode: StatusCodes.Status403Forbidden);
+
+        var session = await Session(http).ConfigureAwait(false);
+        if (session is null)
+            return Results.Unauthorized();
+
+        var api = http.RequestServices.GetRequiredService<CoreApiClient>();
+        var reply = await api.SendAsync(method, path, "platform_admin", session.Value.Bearer, Correlation(http) ?? "", json, http.RequestAborted).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(reply.Body))
+            return Results.StatusCode(reply.Status);
+        return Results.Text(reply.Body, "application/json", statusCode: reply.Status);
     }
 
     private static async Task<IResult> SubmitPack(HttpContext http)

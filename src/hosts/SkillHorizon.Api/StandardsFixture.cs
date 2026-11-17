@@ -33,26 +33,15 @@ public sealed class StandardsFixture
     public async Task LoadAsync(CancellationToken cancellationToken)
     {
         await EnsureLead(cancellationToken).ConfigureAwait(false);
-        var existing = await _jobs.ListAsync(cancellationToken).ConfigureAwait(false);
-        if (existing.Any(framework => framework.Code == FrameworkCode))
-        {
-            await _scope.GrantAsync("person-lead", "data", cancellationToken).ConfigureAwait(false);
-            return;
-        }
+        await _jobs.ImportAsync([Framework()], cancellationToken).ConfigureAwait(false);
+        if (await _taxonomy.FindByStatusAsync("published", cancellationToken).ConfigureAwait(false) is null)
+            await PublishInitialStandards(cancellationToken).ConfigureAwait(false);
+        await EnsureConsultantBenchmark(cancellationToken).ConfigureAwait(false);
+        await _scope.GrantAsync("person-lead", "data", cancellationToken).ConfigureAwait(false);
+    }
 
-        await _jobs.ImportAsync(
-            [
-                new FrameworkImport(
-                    FrameworkCode,
-                    "Consulting",
-                    [
-                        new LevelImport("associate", "Associate", 1),
-                        new LevelImport("consultant", "Consultant", 2)
-                    ],
-                    [new ProfileImport("data-analyst", "Data analyst", "associate")])
-            ],
-            cancellationToken).ConfigureAwait(false);
-
+    private async Task PublishInitialStandards(CancellationToken cancellationToken)
+    {
         var drafted = await _taxonomy.SaveDraftAsync(
             new TaxonomyDraft(
                 [
@@ -90,7 +79,6 @@ public sealed class StandardsFixture
                 [new TargetDraft(sql.SkillId, intermediate.Rank), new TargetDraft(modeling.SkillId, beginner.Rank)]),
             cancellationToken).ConfigureAwait(false);
         await _benchmarks.PublishAsync(first.BenchmarkVersionId, "person-ld", "standards-fixture", cancellationToken).ConfigureAwait(false);
-        await _scope.GrantAsync("person-lead", "data", cancellationToken).ConfigureAwait(false);
         await _benchmarks.SaveDraftAsync(
             new BenchmarkDraftWrite(
                 profile.ProfileId,
@@ -98,6 +86,54 @@ public sealed class StandardsFixture
                 [new TargetDraft(sql.SkillId, advanced.Rank), new TargetDraft(modeling.SkillId, beginner.Rank)]),
             cancellationToken).ConfigureAwait(false);
     }
+
+    private async Task EnsureConsultantBenchmark(CancellationToken cancellationToken)
+    {
+        var published = await _taxonomy.FindByStatusAsync("published", cancellationToken).ConfigureAwait(false);
+        if (published is null)
+            return;
+
+        var profile = (await _jobs.ListAsync(cancellationToken).ConfigureAwait(false))
+            .SelectMany(framework => framework.Profiles)
+            .SingleOrDefault(item => item.Code == "data-consultant");
+        if (profile is null)
+            return;
+
+        var versions = await _benchmarks.PublishedAsync(cancellationToken).ConfigureAwait(false);
+        if (versions.Any(version => version.ProfileCode == "data-consultant" && version.Status == "published"))
+            return;
+
+        var drafts = await _benchmarks.ListDraftsAsync(cancellationToken).ConfigureAwait(false);
+        var draft = drafts.FirstOrDefault(version => version.ProfileCode == "data-consultant");
+        if (draft is null)
+        {
+            var sql = published.Skills.Single(skill => skill.Code == "sql");
+            var modeling = published.Skills.Single(skill => skill.Code == "modeling");
+            var intermediate = published.Proficiencies.Single(item => item.Code == "intermediate");
+            var advanced = published.Proficiencies.Single(item => item.Code == "advanced");
+            draft = await _benchmarks.SaveDraftAsync(
+                new BenchmarkDraftWrite(
+                    profile.ProfileId,
+                    published.TaxonomyVersionId,
+                    [new TargetDraft(sql.SkillId, advanced.Rank), new TargetDraft(modeling.SkillId, intermediate.Rank)]),
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        await _benchmarks.PublishAsync(draft.BenchmarkVersionId, "person-ld", "standards-fixture", cancellationToken).ConfigureAwait(false);
+    }
+
+    private static FrameworkImport Framework() =>
+        new(
+            FrameworkCode,
+            "Consulting",
+            [
+                new LevelImport("associate", "Associate", 1),
+                new LevelImport("consultant", "Consultant", 2)
+            ],
+            [
+                new ProfileImport("data-analyst", "Data analyst", "associate"),
+                new ProfileImport("data-consultant", "Data consultant", "consultant")
+            ]);
 
     private async Task EnsureLead(CancellationToken cancellationToken)
     {

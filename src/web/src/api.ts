@@ -841,6 +841,11 @@ export type ProfileRequest = {
   recordedAt: string;
   profileId: string | null;
   profileName: string | null;
+  title?: string;
+  evidence?: string;
+  requestStatus?: string;
+  competencyCode?: string | null;
+  competencyName?: string | null;
 };
 
 export type SentDraft = {
@@ -908,9 +913,290 @@ export function getCatalogueOverview(): Promise<CatalogueOverview> {
   return readOk("/api/catalogue/overview");
 }
 
+export type BoardSkill = {
+  skillId: string;
+  code: string;
+  name: string;
+  category: string;
+  rank: number | null;
+  levelSet: boolean;
+  suggestedRank: number | null;
+};
+
+export type BoardProfile = {
+  profileId: string;
+  code: string;
+  name: string;
+  purpose: string;
+  band: string;
+  family: string;
+  competencyCode: string;
+  frameworkName: string;
+  levelName: string;
+  benchmarkVersionId: string | null;
+  taxonomyVersionId: string | null;
+  versionNumber: number | null;
+  status: string | null;
+  publishedAt: string | null;
+  sentAt: string | null;
+  sent: boolean;
+  skills: BoardSkill[];
+};
+
+export type BoardCompetency = {
+  code: string;
+  name: string;
+  practiceCode: string;
+  practiceName: string;
+  comLead: string;
+  approvalStatus: string;
+  profiles: BoardProfile[];
+};
+
+export type BoardTaxonomy = {
+  taxonomyVersionId: string;
+  versionNumber: number;
+  status: string;
+  skills: {
+    skillId: string;
+    code: string;
+    name: string;
+    category: string;
+    definition: string;
+    status: string;
+    competencyCode: string;
+    competencyName: string;
+    practiceCode: string;
+    practiceName: string;
+  }[];
+  proficiencies: { code: string; name: string; rank: number; meaning: string }[];
+};
+
+export type CatalogueBoard = {
+  competencies: BoardCompetency[];
+  profiles: BoardProfile[];
+  taxonomy: BoardTaxonomy | null;
+  requests: ProfileRequest[];
+  overlaps: { title: string; detail: string }[];
+  cycle: { cycleName: string; dueOn: string | null; selfAssessment: boolean; managerValidation: boolean; workEvidence: boolean } | null;
+  baselines: { profileName: string; versionNumber: number; publishedAt: string | null; comLead: string }[];
+  snapshots: CatalogueOverview["snapshots"];
+  attention: { tone: string; title: string; detail: string; action: string; screen: string }[];
+  counts: { requests: number; approvals: number; activation: number };
+};
+
+export function getCatalogueBoards(): Promise<CatalogueBoard> {
+  return readOk<CatalogueBoard>("/api/catalogue/boards").then((body) => ({
+    competencies: body.competencies ?? [],
+    profiles: body.profiles ?? [],
+    taxonomy: body.taxonomy ?? null,
+    requests: body.requests ?? [],
+    overlaps: body.overlaps ?? [],
+    cycle: body.cycle ?? null,
+    baselines: body.baselines ?? [],
+    snapshots: body.snapshots ?? [],
+    attention: body.attention ?? [],
+    counts: body.counts ?? { requests: 0, approvals: 0, activation: 0 },
+  }));
+}
+
+export async function createCatalogueProfile(body: {
+  profileName: string;
+  frameworkCode: string;
+  levelCode: string;
+  purpose: string;
+  band: string;
+  family: string;
+  competencyCode: string;
+}): Promise<void> {
+  const response = await postJson("/api/catalogue/profiles", body);
+  if (!response.ok) throw new Error(await readError(response));
+}
+
+export async function activateTaxonomySkill(code: string): Promise<void> {
+  const response = await postJson("/api/catalogue/taxonomy/activate", { code });
+  if (!response.ok) throw new Error(await readError(response));
+}
+
+export type SkillAverage = {
+  skillCode: string;
+  skillName: string;
+  declaredBy: number;
+  declaredAverage: number | null;
+  assessedAverage: number | null;
+  aliasCount: number;
+};
+
+export function getSkillAverages(): Promise<{ averages: SkillAverage[]; note: string | null }> {
+  return readOk<{ averages?: SkillAverage[]; note?: string | null }>("/api/studio/skill-averages").then((body) => ({
+    averages: body.averages ?? [],
+    note: body.note ?? null,
+  }));
+}
+
+export type StudioMeasures = {
+  exposure: { skillCode: string; itemLabel: string; exposedCount: number; ceilingPercent: number }[];
+  selection: { sittingLabel: string; stepNumber: number; skillCode: string; ruleName: string; estimate: number; band: number; outcome: string }[];
+  stopping: { ruleName: string; detail: string; stopBand: number; itemCap: number }[];
+  itemStatistics: { skillCode: string; itemCount: number; difficulty: number; discrimination: number; medianSeconds: number; disposition: string }[];
+  geography: { placeName: string; invitedCount: number; satCount: number; medianSeconds: number; notStartedCount: number; targetPercent: number }[];
+  agreements: { skillCode: string; skillName: string; sampleCount: number; exactPercent: number; adjacentPercent: number; weightedAgreement: number }[];
+  bankDepth: { skillCode: string; populationBand: string; typedPercent: number; spread: number[]; smeName: string; state: string }[];
+  bankPlans: { skillCode: string; currentCount: number; targetDepth: number; authorName: string; reviewerName: string; dueOn: string; phase: string }[];
+  rollingGroups: { talentGroup: string; joinedCount: number; assessedCount: number; planCount: number; waitingCount: number }[];
+  rollingSteps: { sortOrder: number; title: string; detail: string }[];
+  blockers: { title: string; detail: string; stateLabel: string }[];
+  experts: { smeId: string; domainName: string; expertName: string; credentials: string; skillsOwned: string; authoredCount: number; reviewedCount: number; signedOn: string | null }[];
+  criteria: { itemId: string; skillCode: string; prompt: string; criterionName: string; weightPercent: number; description: string; machineScore: number; humanScore: number }[];
+  records: { itemId: string; anchorSkill: string; targetLevel: string; itemType: string; rubricReference: string; authorName: string; reviewerName: string; versionLabel: string; statusLabel: string }[];
+  versions: { itemId: string; versionLabel: string; recordedOn: string; note: string }[];
+  scorecard: { completed: number; open: number; durationSeconds: number; invited: number; sat: number; notStarted: number; questions: { question: string; answer: string; stateLabel: string }[] };
+  heldNote: string;
+};
+
+export function getStudioMeasures(): Promise<StudioMeasures> {
+  return readOk<StudioMeasures>("/api/studio/measures").then((body) => ({
+    exposure: body.exposure ?? [],
+    selection: body.selection ?? [],
+    stopping: body.stopping ?? [],
+    itemStatistics: body.itemStatistics ?? [],
+    geography: body.geography ?? [],
+    agreements: body.agreements ?? [],
+    bankDepth: body.bankDepth ?? [],
+    bankPlans: body.bankPlans ?? [],
+    rollingGroups: body.rollingGroups ?? [],
+    rollingSteps: body.rollingSteps ?? [],
+    blockers: body.blockers ?? [],
+    experts: body.experts ?? [],
+    criteria: body.criteria ?? [],
+    records: body.records ?? [],
+    versions: body.versions ?? [],
+    scorecard: body.scorecard ?? { completed: 0, open: 0, durationSeconds: 0, invited: 0, sat: 0, notStarted: 0, questions: [] },
+    heldNote: body.heldNote ?? "",
+  }));
+}
+
 export async function publishBenchmark(benchmarkVersionId: string): Promise<void> {
   const response = await postJson("/api/benchmarks/publish", { benchmarkVersionId });
   if (!response.ok) throw new Error(await readError(response));
+}
+
+export type AdminGrant = {
+  grantId: string;
+  subjectId: string;
+  workspace: string;
+  grantedAt: string;
+};
+
+export type ResidencyEntity = {
+  legalEntityId: string;
+  displayName: string;
+};
+
+export type ZoneResidency = {
+  zoneId: string;
+  displayName: string;
+  status: string;
+  legalEntities: ResidencyEntity[];
+};
+
+export type ConnectorStatus = {
+  connectorId: string;
+  connectorType: string;
+  enabled: boolean;
+  endpoint: string | null;
+};
+
+export type ModelRegistration = {
+  modelId: string;
+  modelName: string;
+  purpose: string;
+  connected: boolean;
+};
+
+export type AuditRecord = {
+  auditId: string;
+  subjectId: string;
+  action: string;
+  recordType: string;
+  recordId: string;
+  occurredAt: string;
+};
+
+export type MalpracticeCase = {
+  caseId: string;
+  sittingId: string;
+  status: string;
+  openedBy: string;
+  openedAt: string;
+};
+
+export type ExportType = {
+  code: string;
+  description: string;
+};
+
+export type PersonalMetadata = {
+  exportId: string;
+  subjectId: string;
+  displayName: string;
+  legalEntityId: string;
+  countryCode: string;
+  employmentStatus: string;
+  workspaces: string[];
+};
+
+export function getAdminGrants(): Promise<AdminGrant[]> {
+  return readOk<{ grants?: AdminGrant[] }>("/api/admin/grants").then((body) => body.grants ?? []);
+}
+
+export async function grantWorkspace(subjectId: string, workspace: string): Promise<void> {
+  const response = await postJson("/api/admin/grants", { subjectId, workspace });
+  if (!response.ok) throw new Error(await readError(response));
+}
+
+export async function revokeWorkspace(subjectId: string, workspace: string): Promise<void> {
+  const response = await postJson("/api/admin/grants/revoke", { subjectId, workspace });
+  if (!response.ok && response.status !== 204) throw new Error(await readError(response));
+}
+
+export function getAdminSecurity(): Promise<{ residency: ZoneResidency | null; connectors: ConnectorStatus[] }> {
+  return readOk<{ residency?: ZoneResidency | null; connectors?: ConnectorStatus[] }>("/api/admin/security").then((body) => ({
+    residency: body.residency ?? null,
+    connectors: body.connectors ?? [],
+  }));
+}
+
+export function getAdminModels(): Promise<ModelRegistration[]> {
+  return readOk<{ models?: ModelRegistration[] }>("/api/admin/models").then((body) => body.models ?? []);
+}
+
+export function getAdminAudit(): Promise<AuditRecord[]> {
+  return readOk<{ records?: AuditRecord[] }>("/api/admin/audit").then((body) => body.records ?? []);
+}
+
+export function getMalpracticeCases(): Promise<MalpracticeCase[]> {
+  return readOk<{ cases?: MalpracticeCase[] }>("/api/admin/malpractice").then((body) => body.cases ?? []);
+}
+
+export async function openMalpracticeCase(sittingId: string, status: string): Promise<void> {
+  const response = await postJson("/api/admin/malpractice", { sittingId, status });
+  if (!response.ok) throw new Error(await readError(response));
+}
+
+export function getAdminIntegrations(): Promise<ConnectorStatus[]> {
+  return readOk<{ connectors?: ConnectorStatus[] }>("/api/admin/integrations").then((body) => body.connectors ?? []);
+}
+
+export function getAdminExports(): Promise<ExportType[]> {
+  return readOk<{ types?: ExportType[] }>("/api/admin/exports").then((body) => body.types ?? []);
+}
+
+export async function exportPersonalMetadata(subjectId: string): Promise<PersonalMetadata> {
+  const response = await postJson("/api/admin/exports/personal", { subjectId });
+  if (!response.ok) throw new Error(await readError(response));
+  const body = (await response.json()) as PersonalMetadata;
+  return { ...body, workspaces: body.workspaces ?? [] };
 }
 
 export async function signOut(): Promise<void> {

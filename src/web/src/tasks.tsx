@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { closeTask, getTask, getTasks, type EmployeeTask } from "./api";
+import { PageHead } from "./frame";
 import { useTitle } from "./ui";
 
 export function TasksPage() {
@@ -17,37 +18,55 @@ export function TasksPage() {
   }, []);
   useEffect(() => { void load(); }, [load]);
   const overdue = tasks?.filter((task) => owed(task.dueOn) === "Overdue").length ?? 0;
+  const open = tasks?.length ?? 0;
   return (
     <section data-screen="tasks">
-      <p className="eyebrow">Employee</p>
-      <h1>My tasks</h1>
-      <p>Work you still owe on the open path. Handing something in closes the step. It does not change your sealed proficiency.</p>
+      <PageHead
+        eyebrow="Employee · My tasks"
+        title="What you owe, and by when"
+        lede="Work still assigned on the open path. Handing something in closes the step. It does not change your sealed proficiency."
+      />
       {problem ? <Problem text={problem} onRetry={() => void load()} /> : null}
-      {tasks ? (
-        <ul className="home-figures">
-          <li><b>{tasks.length}</b><span>Open</span></li>
-          <li><b>{overdue}</b><span>Overdue</span></li>
-        </ul>
-      ) : null}
-      {tasks && tasks.length === 0 ? <p>Nothing is owed.</p> : null}
-      {tasks && tasks.length > 0 ? (
-        <div className="team-scroll">
-          <table className="team-table">
-            <thead>
-              <tr><th>Task</th><th>Due</th><th>Status</th></tr>
-            </thead>
-            <tbody>
-              {tasks.map((task) => (
-                <tr key={task.stepId}>
-                  <td><Link to={`/workspace/tasks/${task.stepId}`}>{task.title}</Link></td>
-                  <td>{task.dueOn}</td>
-                  <td>{owed(task.dueOn)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div className="stat-row cols-2">
+        <div className="stat-card">
+          <span className="kicker">Open</span>
+          <strong>{tasks ? open : "—"}</strong>
+          <span className="hint">Assigned steps</span>
         </div>
-      ) : null}
+        <div className="stat-card">
+          <span className="kicker">Overdue</span>
+          <strong>{tasks ? overdue : "—"}</strong>
+          <span className="hint">Due date already passed</span>
+        </div>
+      </div>
+      <article className="surface-card">
+        <header>
+          <div>
+            <h2>Open tasks</h2>
+            <p className="card-note">{tasks ? `${open} still assigned` : "Not loaded"}</p>
+          </div>
+          <Link to="/workspace/path">Open my path</Link>
+        </header>
+        {tasks && tasks.length === 0 ? <p className="empty-note">Nothing is owed.</p> : null}
+        {tasks?.map((task) => {
+          const state = owed(task.dueOn);
+          return (
+            <Link key={task.stepId} className="task-row" to={`/workspace/tasks/${task.stepId}`}>
+              <span className="task-kind">{task.skillCode}</span>
+              <span className="task-main">
+                <b>{task.title}</b>
+                <span>Closes the gap on {task.skillCode}</span>
+              </span>
+              <span className="task-due">
+                <b>{task.dueOn}</b>
+                <span>due</span>
+              </span>
+              <span className={state === "Overdue" ? "chip coral" : "chip mint"}>{state}</span>
+            </Link>
+          );
+        })}
+      </article>
+      <p className="callout"><i aria-hidden="true">i</i><span><b>Handing something in closes the step. It does not move your level.</b> Your sealed proficiency moves when a sitting is sealed.</span></p>
     </section>
   );
 }
@@ -57,7 +76,7 @@ export function TaskPage() {
   const [task, setTask] = useState<EmployeeTask | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  useTitle("Task");
+  useTitle(task?.title ?? "Task");
   const load = useCallback(async () => {
     if (!stepId) return;
     try {
@@ -68,19 +87,24 @@ export function TaskPage() {
     }
   }, [stepId]);
   useEffect(() => { void load(); }, [load]);
+  const state = task ? (task.status === "assigned" ? owed(task.dueOn) : "Closed") : null;
   return (
     <section data-screen="task">
-      <p className="eyebrow">Employee</p>
-      <p><Link to="/workspace/tasks">My tasks</Link></p>
+      <p className="back-link"><Link to="/workspace/tasks">My tasks</Link></p>
+      <PageHead
+        eyebrow={task ? `Task · ${task.skillCode}` : "Task"}
+        title={task?.title ?? "Task"}
+        lede="Hand in what you did. Closing writes the file onto this step and leaves your sealed proficiency where it is."
+      />
       {problem ? <Problem text={problem} onRetry={() => void load()} /> : null}
       {task ? (
         <>
-          <h1>{task.title}</h1>
-          <p>Hand in what you did. Closing writes the file onto this step and leaves your sealed proficiency where it is.</p>
-          <ul className="home-figures">
-            <li><b>{task.dueOn}</b><span>Due</span></li>
-            <li><b>{task.status === "assigned" ? owed(task.dueOn) : "Closed"}</b><span>Status</span></li>
-          </ul>
+          <div className="meta-row">
+            <div><span>Due</span><b>{task.dueOn}</b></div>
+            <div><span>Status</span><b>{state}</b></div>
+            <div><span>Skill</span><b>{task.skillCode}</b></div>
+            <div><span>Evidence</span><b>{task.evidenceName || "None stored"}</b></div>
+          </div>
           {task.status === "assigned" ? (
             <form
               className="task-close"
@@ -95,6 +119,7 @@ export function TaskPage() {
                   .then((closed) => {
                     setTask(closed);
                     setProblem(null);
+                    window.dispatchEvent(new Event("skillhorizon-tasks"));
                   })
                   .catch((error: unknown) => {
                     setProblem(error instanceof Error ? error.message : "That task was not closed.");
@@ -103,11 +128,15 @@ export function TaskPage() {
               }}
             >
               <h2>Close it</h2>
-              <input name="evidence" type="file" />
-              <button type="submit" className="draft-save" disabled={pending}>Hand it in and close</button>
+              <p>The file is stored on this step. The page does not show the file bytes.</p>
+              <label>
+                Evidence file
+                <input name="evidence" type="file" required />
+              </label>
+              <button type="submit" className="draft-publish" disabled={pending}>Hand it in and close</button>
             </form>
           ) : (
-            <p>This step is closed.{task.evidenceName ? ` Evidence: ${task.evidenceName}.` : ""} Your sealed proficiency is unchanged.</p>
+            <p className="callout"><i aria-hidden="true">✓</i><span><b>Closed.</b> {task.evidenceName ? `Evidence: ${task.evidenceName}. ` : ""}Your sealed proficiency is unchanged.</span></p>
           )}
         </>
       ) : null}

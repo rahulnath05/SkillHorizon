@@ -54,9 +54,16 @@ builder.Services.AddSingleton(serviceProvider => new AssessmentBank(
     serviceProvider.GetRequiredService<NpgsqlDataSource>(),
     serviceProvider.GetRequiredService<CoreCaller>().Client));
 builder.Services.AddSingleton<ItemFixture>();
+builder.Services.AddSingleton<StudioMeasureFixture>();
+builder.Services.AddSingleton(_ => new PersonaLearningFixture(
+    NpgsqlDataSource.Create(options.AssessmentConnectionString),
+    NpgsqlDataSource.Create(options.ProgressConnectionString),
+    options.DomainConnectionString,
+    options.EvidenceRoot));
 builder.Services.AddHealthChecks()
     .AddNpgSql(options.AssessmentConnectionString, name: "assessment-postgres")
     .AddNpgSql(options.ProgressConnectionString, name: "progress-postgres");
+builder.AddDevelopmentSwagger();
 
 var app = builder.Build();
 if (options.MigrateOnStartup)
@@ -65,6 +72,7 @@ if (options.MigrateOnStartup)
     SchemaMigrator.ApplyProgress(options.ProgressConnectionString);
 }
 
+app.UseDevelopmentSwagger();
 app.UseSkillHorizonRequestLogging();
 app.MapHealthChecks("/health");
 app.MapPost("/sittings", async (HttpContext context, AssessmentSession sessions, CancellationToken cancellationToken) =>
@@ -439,6 +447,17 @@ app.MapGet("/studio/marks", async (HttpContext context, AssessmentBank bank, Can
         return Results.Problem(title: "Studio refused", detail: exception.Message, statusCode: StatusCodes.Status403Forbidden);
     }
 });
+app.MapGet("/studio/measures", async (HttpContext context, AssessmentBank bank, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        return Results.Ok(await bank.MeasuresAsync(Incoming.Bearer(context), Incoming.Workspace(context), Incoming.Correlation(context), cancellationToken).ConfigureAwait(false));
+    }
+    catch (UnauthorizedAccessException exception)
+    {
+        return Results.Problem(title: "Studio refused", detail: exception.Message, statusCode: StatusCodes.Status403Forbidden);
+    }
+});
 app.MapGet("/studio/panel", async (HttpContext context, AssessmentBank bank, CancellationToken cancellationToken) =>
 {
     try
@@ -487,7 +506,14 @@ app.MapGet("/team/paths", async (HttpContext context, DevelopmentPaths paths, Ca
 });
 
 if (options.LoadLearningFixture)
+{
     app.Services.GetRequiredService<ItemFixture>().LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
+    app.Services.GetRequiredService<PersonaLearningFixture>().LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
+    app.Services.GetRequiredService<StudioMeasureFixture>().LoadAsync(CancellationToken.None).GetAwaiter().GetResult();
+}
+
+if (args.Contains("--seed-only"))
+    return;
 
 app.Run();
 

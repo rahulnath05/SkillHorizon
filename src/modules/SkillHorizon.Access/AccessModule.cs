@@ -9,6 +9,7 @@ public static class AccessModule
     public static IServiceCollection AddAccessModule(this IServiceCollection services)
     {
         services.AddSingleton<IGrantCheck, PostgresGrantCheck>();
+        services.AddSingleton<IWorkspaceAdministration, PostgresWorkspaceAdministration>();
         return services;
     }
 }

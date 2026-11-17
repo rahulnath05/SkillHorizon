@@ -134,7 +134,7 @@ public sealed class FrameworkProofTests
         var directory = await ReadShell(anonymous);
         Assert.False(directory.Authenticated);
         Assert.Equal(
-            ["person-multi", "person-single", "person-unmapped", "person-nogrant", "person-ld"],
+            ["person-multi", "person-single", "person-unmapped", "person-nogrant", "person-ld", "person-admin"],
             directory.Identities.Select(identity => identity.SubjectId).ToArray());
         Assert.Empty(directory.Workspaces);
 

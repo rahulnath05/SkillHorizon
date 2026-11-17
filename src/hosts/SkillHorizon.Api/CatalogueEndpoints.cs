@@ -18,6 +18,10 @@ public static class CatalogueEndpoints
         app.MapPost("/catalogue/submissions", Send);
         app.MapGet("/catalogue/review", Review);
         app.MapGet("/catalogue/overview", Overview);
+        app.MapGet("/catalogue/boards", Boards);
+        app.MapPost("/catalogue/profiles", CreateProfile);
+        app.MapPost("/catalogue/taxonomy/activate", ActivateSkill);
+        app.MapGet("/studio/skill-averages", SkillAverages);
         app.MapGet("/catalogue/market", Market);
         app.MapPost("/commands/market/draft", SaveMarket);
         app.MapPost("/commands/market/publish", PublishMarket);
@@ -186,6 +190,81 @@ public static class CatalogueEndpoints
         });
     }
 
+    private static async Task<IResult> Boards(HttpContext context, IGrantCheck grants, Npgsql.NpgsqlDataSource dataSource, Microsoft.Extensions.Options.IOptions<SkillHorizon.Hosting.SkillHorizonOptions> options, CancellationToken cancellationToken)
+    {
+        var refused = await Learning(context, grants, cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        var board = await new CatalogueBoards(dataSource).ReadAsync(options.Value.ZoneId, cancellationToken).ConfigureAwait(false);
+        return Results.Ok(board);
+    }
+
+    private static async Task<IResult> CreateProfile(HttpContext context, IGrantCheck grants, Npgsql.NpgsqlDataSource dataSource, CreateProfileBody? body, CancellationToken cancellationToken)
+    {
+        var refused = await Learning(context, grants, cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        try
+        {
+            var profile = await new CatalogueStore(dataSource).CreateProfileAsync(
+                body?.FrameworkCode ?? "",
+                body?.LevelCode ?? "",
+                body?.ProfileName ?? "",
+                body?.Purpose ?? "",
+                body?.Band ?? "",
+                body?.Family ?? "",
+                body?.CompetencyCode ?? "",
+                cancellationToken).ConfigureAwait(false);
+            return Results.Ok(new { profile, published = false });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Results.Problem(title: "Profile refused", detail: exception.Message, statusCode: StatusCodes.Status400BadRequest);
+        }
+    }
+
+    private static async Task<IResult> ActivateSkill(HttpContext context, IGrantCheck grants, Npgsql.NpgsqlDataSource dataSource, ActivateSkillBody? body, CancellationToken cancellationToken)
+    {
+        var refused = await Learning(context, grants, cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        try
+        {
+            await new CatalogueStore(dataSource).ActivateSkillAsync(body?.Code ?? "", cancellationToken).ConfigureAwait(false);
+            return Results.NoContent();
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Results.Problem(title: "Taxonomy refused", detail: exception.Message, statusCode: StatusCodes.Status400BadRequest);
+        }
+    }
+
+    private static async Task<IResult> SkillAverages(HttpContext context, IGrantCheck grants, Npgsql.NpgsqlDataSource dataSource, CancellationToken cancellationToken)
+    {
+        var refused = await Learning(context, grants, cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        var rows = await new CatalogueBoards(dataSource).SkillAveragesAsync(cancellationToken).ConfigureAwait(false);
+        SkillAverageRow? widest = null;
+        decimal widestGap = 0;
+        foreach (var row in rows)
+        {
+            if (row.DeclaredAverage is not decimal declared || row.AssessedAverage is not decimal assessed)
+                continue;
+            var gap = declared - assessed;
+            if (widest is null || gap > widestGap)
+            {
+                widest = row;
+                widestGap = gap;
+            }
+        }
+
+        string? note = widest is null
+            ? null
+            : $"{widest.SkillName} is {widestGap:0.00} levels from the declared average on the stored rows.";
+        return Results.Ok(new { averages = rows, note });
+    }
+
     private static async Task<IResult> Market(HttpContext context, IGrantCheck grants, IMarketDemand market, CancellationToken cancellationToken)
     {
         var refused = await Learning(context, grants, cancellationToken).ConfigureAwait(false);
@@ -290,4 +369,8 @@ public static class CatalogueEndpoints
     private sealed record SendBody(Guid BenchmarkVersionId);
 
     private sealed record MarketBody(string? PracticeCode, string? Note, int? PostingCount, int? RoleCount);
+
+    private sealed record CreateProfileBody(string? ProfileName, string? FrameworkCode, string? LevelCode, string? Purpose, string? Band, string? Family, string? CompetencyCode);
+
+    private sealed record ActivateSkillBody(string? Code);
 }

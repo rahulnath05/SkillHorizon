@@ -23,11 +23,13 @@ builder.Services.AddSingleton<ControlStore>();
 builder.Services.AddHttpClient("zones", client => client.Timeout = TimeSpan.FromSeconds(5));
 builder.Services.AddHealthChecks()
     .AddNpgSql(options.ControlConnectionString, name: "control-postgres");
+builder.AddDevelopmentSwagger();
 
 var app = builder.Build();
 if (options.MigrateOnStartup)
     SchemaMigrator.ApplyControl(options.ControlConnectionString);
 
+app.UseDevelopmentSwagger();
 app.UseSkillHorizonRequestLogging();
 app.Use(async (context, next) =>
 {
@@ -102,6 +104,16 @@ app.MapGet("/zones/{zoneId}/hr", async (string zoneId, ControlStore store, Cance
 });
 app.MapGet("/reference/subscribers", async (ControlStore store, CancellationToken cancellationToken) =>
     Results.Ok(await store.ListReferenceSubscribersAsync(cancellationToken).ConfigureAwait(false)));
+app.MapGet("/zones/{zoneId}/residency", async (string zoneId, ControlStore store, CancellationToken cancellationToken) =>
+{
+    var residency = await store.ReadResidencyAsync(zoneId, cancellationToken).ConfigureAwait(false);
+    return residency is null ? Results.NotFound() : Results.Ok(residency);
+});
+app.MapGet("/zones/{zoneId}/connectors", async (string zoneId, ControlStore store, CancellationToken cancellationToken) =>
+{
+    var connectors = await store.ListConnectorsAsync(zoneId, cancellationToken).ConfigureAwait(false);
+    return connectors is null ? Results.NotFound() : Results.Ok(connectors);
+});
 app.MapPost("/zones/{zoneId}/activate", async (string zoneId, ControlStore store, CancellationToken cancellationToken) =>
 {
     if (!await ZoneExists(store, zoneId, cancellationToken).ConfigureAwait(false))

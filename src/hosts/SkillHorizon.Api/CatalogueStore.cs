@@ -11,7 +11,12 @@ public sealed record ProfileRequestRow(
     string Note,
     DateTimeOffset RecordedAt,
     Guid? ProfileId,
-    string? ProfileName);
+    string? ProfileName,
+    string Title,
+    string Evidence,
+    string RequestStatus,
+    string? CompetencyCode,
+    string? CompetencyName);
 
 public sealed record SentDraftRow(
     Guid BenchmarkVersionId,
@@ -44,11 +49,14 @@ public sealed class CatalogueStore
             SELECT correction.request_id, correction.manager_employee_id, correction.report_employee_id,
                    COALESCE(person.display_name, correction.report_employee_id),
                    correction.note, correction.recorded_at,
-                   opening.profile_id, profile.display_name
+                   opening.profile_id, profile.display_name,
+                   correction.title, correction.evidence, correction.request_status,
+                   correction.competency_code, competency.display_name
             FROM workforce.profile_correction AS correction
             LEFT JOIN workforce.person AS person ON person.employee_id = correction.report_employee_id
             LEFT JOIN catalogue.profile_opening AS opening ON opening.request_id = correction.request_id
             LEFT JOIN job_architecture.job_profile AS profile ON profile.profile_id = opening.profile_id
+            LEFT JOIN taxonomy.competency AS competency ON competency.code = correction.competency_code
             ORDER BY correction.recorded_at DESC, correction.request_id
             """);
         var rows = new List<ProfileRequestRow>();
@@ -63,7 +71,12 @@ public sealed class CatalogueStore
                 reader.GetString(4),
                 Timestamp(reader.GetValue(5)),
                 reader.IsDBNull(6) ? null : reader.GetGuid(6),
-                reader.IsDBNull(7) ? null : reader.GetString(7)));
+                reader.IsDBNull(7) ? null : reader.GetString(7),
+                reader.GetString(8),
+                reader.GetString(9),
+                reader.GetString(10),
+                reader.IsDBNull(11) ? null : reader.GetString(11),
+                reader.IsDBNull(12) ? null : reader.GetString(12)));
         }
 
         return rows;
@@ -275,6 +288,92 @@ public sealed class CatalogueStore
             """,
             cancellationToken).ConfigureAwait(false);
         return (snapshots, requests, approvals);
+    }
+
+    public async Task<FrameworkProfile> CreateProfileAsync(
+        string frameworkCode,
+        string levelCode,
+        string profileName,
+        string purpose,
+        string band,
+        string family,
+        string competencyCode,
+        CancellationToken cancellationToken)
+    {
+        var framework = frameworkCode.Trim();
+        var level = levelCode.Trim();
+        var name = profileName.Trim();
+        if (framework.Length == 0 || level.Length == 0 || name.Length is 0 or > 200)
+            throw new InvalidOperationException("A profile needs a framework, a level, and a name.");
+
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var levelRow = await FindLevel(connection, transaction, framework, level, cancellationToken).ConfigureAwait(false);
+        var profileId = Guid.NewGuid();
+        var code = ProfileCode(name, profileId);
+        await using (var insert = new NpgsqlCommand(
+            """
+            INSERT INTO job_architecture.job_profile (
+                profile_id, framework_id, level_id, code, display_name, purpose, band, family_name, competency_code)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULLIF($9, ''))
+            """,
+            connection,
+            transaction))
+        {
+            insert.Parameters.AddWithValue(profileId);
+            insert.Parameters.AddWithValue(levelRow.FrameworkId);
+            insert.Parameters.AddWithValue(levelRow.LevelId);
+            insert.Parameters.AddWithValue(code);
+            insert.Parameters.AddWithValue(name);
+            insert.Parameters.AddWithValue(purpose.Trim());
+            insert.Parameters.AddWithValue(band.Trim());
+            insert.Parameters.AddWithValue(family.Trim());
+            insert.Parameters.AddWithValue(competencyCode.Trim());
+            try
+            {
+                await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UniqueViolation)
+            {
+                throw new InvalidOperationException("That profile code is already in use.");
+            }
+        }
+
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return new FrameworkProfile(profileId, code, name, level, levelRow.LevelName, levelRow.LevelRank);
+    }
+
+    public async Task ActivateSkillAsync(string skillCode, CancellationToken cancellationToken)
+    {
+        var code = skillCode.Trim();
+        if (code.Length == 0)
+            throw new InvalidOperationException("Name the skill to mark active.");
+
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        int updated;
+        await using (var skill = new NpgsqlCommand(
+            "UPDATE taxonomy.skill SET status = 'active' WHERE code = $1",
+            connection,
+            transaction))
+        {
+            skill.Parameters.AddWithValue(code);
+            updated = await skill.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (updated == 0)
+            throw new InvalidOperationException("That taxonomy skill does not exist.");
+
+        await using (var snapshot = new NpgsqlCommand(
+            "UPDATE taxonomy.version_skill SET status = 'active' WHERE skill_code = $1",
+            connection,
+            transaction))
+        {
+            snapshot.Parameters.AddWithValue(code);
+            await snapshot.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task<bool> RequestExists(NpgsqlConnection connection, NpgsqlTransaction transaction, Guid requestId, CancellationToken cancellationToken)
