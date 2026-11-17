@@ -870,18 +870,25 @@ export function RequestsPage() {
           <article key={request.requestId} className="request-card">
             <div>
               <span className={label === "Benchmark ready" ? "pill mint" : label === "New request" || label === "Benchmark in progress" ? "pill amber" : "pill grey"}>{label}</span>
-              <h2>{request.title || request.displayName}</h2>
+              <h2>{request.title || request.note}</h2>
               <p>{request.competencyName || "Competency"} · {formatAsOf(request.recordedAt)}</p>
             </div>
             <div className="request-note">
               <p>{request.note}</p>
               {request.evidence ? <p className="evidence">{request.evidence}</p> : null}
-              <p>Requested by {request.managerEmployeeId}</p>
+              <p>{request.profileName ? `Profile opened: ${request.profileName}` : "Not started."}</p>
+              {profile && profile.skills.length > 0 ? (
+                <ul className="request-skills">
+                  {profile.skills.map((skill) => (
+                    <li key={skill.skillId}><b>{skill.name}</b><span>{skill.levelSet && skill.rank !== null ? `L${skill.rank}` : "Set later"}</span></li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
             <div className="request-action">
               {profile ? <p>{done} of {total} skill levels set</p> : null}
               {profile ? <NavLink className="fill-btn" to="/workspace/workspace">{action}</NavLink> : (
-                <button type="button" className={needsContext ? "outline-btn" : "fill-btn"} onClick={() => { setOpeningId(request.requestId); setProfileName(request.title || request.displayName); }}>{action}</button>
+                <button type="button" className={needsContext ? "outline-btn" : "fill-btn"} onClick={() => { setOpeningId(request.requestId); setProfileName(request.title || request.note); }}>{action}</button>
               )}
             </div>
           </article>

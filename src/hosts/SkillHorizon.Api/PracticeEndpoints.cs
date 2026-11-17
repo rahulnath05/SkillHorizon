@@ -18,10 +18,12 @@ public static class PracticeEndpoints
         app.MapPost("/commands/packs/{packId:guid}/seal", SealPack);
         app.MapGet("/packs", ListPacks);
         app.MapGet("/practice/briefing", Briefing);
+        app.MapGet("/practice/profile", ProfileLens);
         app.MapGet("/practice/baseline", Baseline);
         app.MapGet("/practice/progression", Progression);
         app.MapGet("/practice/market", Market);
         app.MapGet("/practice/requests", Requests);
+        app.MapPost("/practice/requests", FileRequest);
         app.MapPost("/practice/requests/{requestId:guid}/accept", AcceptRequest);
         app.MapPost("/commands/cohorts/limit", SetLimit);
         app.MapPost("/commands/cohorts", CreateCohort);
@@ -115,6 +117,111 @@ public static class PracticeEndpoints
         return Results.Ok(new { practiceCode = practice, pack = open, requests, snapshot });
     }
 
+    private static async Task<IResult> ProfileLens(
+        HttpContext context,
+        IGrantCheck grants,
+        IPracticeScope scope,
+        NpgsqlDataSource dataSource,
+        CancellationToken cancellationToken)
+    {
+        var refused = await Refuse(context, grants, Workspaces.CompetencyLead, cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        var practice = context.Request.Query["practice"].ToString();
+        if (!await scope.HoldsAsync(Subject(context), practice, cancellationToken).ConfigureAwait(false))
+            return Results.Problem(title: "Scope required", detail: "That practice is outside this lead's scope.", statusCode: StatusCodes.Status403Forbidden);
+        if (!Guid.TryParse(context.Request.Query["profile"], out var profileId))
+            return Results.Problem(title: "Profile required", detail: "Name the profile to open.", statusCode: StatusCodes.Status400BadRequest);
+
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using (var allowed = new NpgsqlCommand(
+            """
+            SELECT 1
+            FROM attestation.pack_row AS row
+            JOIN attestation.pack AS pack ON pack.pack_id = row.pack_id
+            WHERE row.job_profile_id = $1 AND pack.practice_code = $2
+            """,
+            connection))
+        {
+            allowed.Parameters.AddWithValue(profileId);
+            allowed.Parameters.AddWithValue(practice);
+            if (await allowed.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) is null)
+                return Results.Problem(title: "Profile missing", detail: "That profile is not in this practice pack.", statusCode: StatusCodes.Status404NotFound);
+        }
+
+        string name = "";
+        string purpose = "";
+        string band = "";
+        string family = "";
+        string level = "";
+        await using (var profile = new NpgsqlCommand(
+            """
+            SELECT profile.display_name, profile.purpose, profile.band, profile.family_name, level.display_name
+            FROM job_architecture.job_profile AS profile
+            JOIN job_architecture.level AS level ON level.level_id = profile.level_id
+            WHERE profile.profile_id = $1
+            """,
+            connection))
+        {
+            profile.Parameters.AddWithValue(profileId);
+            await using var reader = await profile.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                return Results.Problem(title: "Profile missing", detail: "That job profile does not exist.", statusCode: StatusCodes.Status404NotFound);
+            name = reader.GetString(0);
+            purpose = reader.GetString(1);
+            band = reader.GetString(2);
+            family = reader.GetString(3);
+            level = reader.GetString(4);
+        }
+
+        var prior = new Dictionary<string, (string Name, string Level)>(StringComparer.Ordinal);
+        var proposed = new Dictionary<string, (string Name, string Level)>(StringComparer.Ordinal);
+        await using (var targets = new NpgsqlCommand(
+            """
+            SELECT target.skill_code, target.skill_name, target.proficiency_name, version.status
+            FROM benchmark.version AS version
+            JOIN benchmark.target AS target ON target.benchmark_version_id = version.benchmark_version_id
+            WHERE version.job_profile_id = $1 AND version.status IN ('published', 'draft')
+            ORDER BY target.skill_name
+            """,
+            connection))
+        {
+            targets.Parameters.AddWithValue(profileId);
+            await using var reader = await targets.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                var item = (reader.GetString(1), reader.GetString(2));
+                if (reader.GetString(3) == "draft")
+                    proposed[reader.GetString(0)] = item;
+                else
+                    prior[reader.GetString(0)] = item;
+            }
+        }
+
+        var codes = prior.Keys.Union(proposed.Keys).OrderBy(code => (proposed.TryGetValue(code, out var next) ? next.Name : prior[code].Name));
+        var rows = codes.Select(code =>
+        {
+            var hasPrior = prior.TryGetValue(code, out var was);
+            var hasProposed = proposed.TryGetValue(code, out var now);
+            return new
+            {
+                skillName = hasProposed ? now.Name : was.Name,
+                prior = hasPrior ? was.Level : now.Level,
+                proposed = hasProposed ? now.Level : was.Level
+            };
+        }).ToArray();
+
+        return Results.Ok(new
+        {
+            profileName = name,
+            purpose,
+            band,
+            familyName = family,
+            levelName = level,
+            targets = rows
+        });
+    }
+
     private static async Task<IResult> Requests(HttpContext context, IGrantCheck grants, IPracticeScope scope, NpgsqlDataSource dataSource, CancellationToken cancellationToken)
     {
         var refused = await Refuse(context, grants, Workspaces.CompetencyLead, cancellationToken).ConfigureAwait(false);
@@ -125,6 +232,40 @@ public static class PracticeEndpoints
             return Results.Problem(title: "Scope required", detail: "That practice is outside this lead's scope.", statusCode: StatusCodes.Status403Forbidden);
         var requests = await new PracticeReviewStore(dataSource).ListAsync(practice, cancellationToken).ConfigureAwait(false);
         return Results.Ok(new { requests });
+    }
+
+    private static async Task<IResult> FileRequest(
+        HttpContext context,
+        IGrantCheck grants,
+        IPracticeScope scope,
+        NpgsqlDataSource dataSource,
+        FileRequestBody? body,
+        CancellationToken cancellationToken)
+    {
+        var refused = await Refuse(context, grants, Workspaces.CompetencyLead, cancellationToken).ConfigureAwait(false);
+        if (refused is not null)
+            return refused;
+        var practice = body?.PracticeCode?.Trim() ?? "";
+        if (!await scope.HoldsAsync(Subject(context), practice, cancellationToken).ConfigureAwait(false))
+            return Results.Problem(title: "Scope required", detail: "That practice is outside this lead's scope.", statusCode: StatusCodes.Status403Forbidden);
+        try
+        {
+            var anchors = (body?.Anchors ?? []).Select(anchor => (anchor.Name?.Trim() ?? "", anchor.Rank?.Trim() ?? "")).ToArray();
+            var request = await new PracticeReviewStore(dataSource).FileAsync(
+                Subject(context),
+                practice,
+                body?.ProfileName ?? "",
+                body?.Purpose ?? "",
+                body?.Path ?? "",
+                body?.CompetencyCode,
+                anchors,
+                cancellationToken).ConfigureAwait(false);
+            return Results.Ok(request);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Problem("Request refused", exception);
+        }
     }
 
     private static async Task<IResult> AcceptRequest(
@@ -306,4 +447,8 @@ public static class PracticeEndpoints
     private sealed record DecisionRequest(Guid RowId, string? Decision);
 
     private sealed record AcceptRequestBody(string? PracticeCode);
+
+    private sealed record AnchorBody(string? Name, string? Rank);
+
+    private sealed record FileRequestBody(string? PracticeCode, string? ProfileName, string? Purpose, string? Path, string? CompetencyCode, AnchorBody[]? Anchors);
 }

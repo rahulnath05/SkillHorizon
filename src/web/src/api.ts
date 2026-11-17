@@ -627,6 +627,13 @@ export type PracticeRequest = {
   note: string;
   recordedAt: string;
   acceptedAt?: string | null;
+  title?: string;
+  evidence?: string;
+  requestStatus?: string;
+  competencyName?: string;
+  profileName?: string | null;
+  managerEmployeeId?: string;
+  skills?: { name: string; level: string }[];
 };
 
 export type PracticeBriefing = {
@@ -635,6 +642,19 @@ export type PracticeBriefing = {
   requests: PracticeRequest[];
   snapshot: PracticeSnapshot | null;
 };
+
+export type ProfileLens = {
+  profileName: string;
+  purpose: string;
+  band: string;
+  familyName: string;
+  levelName: string;
+  targets: { skillName: string; prior: string; proposed: string }[];
+};
+
+export function getPracticeProfile(practice: string, profileId: string): Promise<ProfileLens> {
+  return readOk<ProfileLens>(`/api/practice/profile?practice=${encodeURIComponent(practice)}&profile=${encodeURIComponent(profileId)}`);
+}
 
 export async function getPracticeBriefing(practice: string): Promise<PracticeBriefing> {
   const body = await readOk<PracticeBriefing>(`/api/practice/briefing?practice=${encodeURIComponent(practice)}`);
@@ -647,6 +667,19 @@ export async function getPracticeBriefing(practice: string): Promise<PracticeBri
 
 export async function acceptPracticeRequest(requestId: string, practiceCode: string): Promise<PracticeRequest> {
   const response = await postJson(`/api/practice/requests/${requestId}/accept`, { practiceCode });
+  if (!response.ok) throw new Error(await readError(response));
+  return (await response.json()) as PracticeRequest;
+}
+
+export async function filePracticeRequest(body: {
+  practiceCode: string;
+  profileName: string;
+  purpose: string;
+  path: "lead" | "ld";
+  competencyCode: string;
+  anchors: { name: string; rank: string }[];
+}): Promise<PracticeRequest> {
+  const response = await postJson("/api/practice/requests", body);
   if (!response.ok) throw new Error(await readError(response));
   return (await response.json()) as PracticeRequest;
 }
