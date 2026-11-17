@@ -31,7 +31,11 @@ builder.AddDevelopmentSwagger();
 
 var app = builder.Build();
 if (options.MigrateOnStartup)
+{
     SchemaMigrator.ApplyDomain(options.DomainConnectionString);
+    if (options.LoadLearningFixture)
+        SchemaMigrator.ApplyCatalogueSeed(options.DomainConnectionString);
+}
 
 app.UseDevelopmentSwagger();
 app.UseSkillHorizonRequestLogging();

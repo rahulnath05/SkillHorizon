@@ -544,6 +544,9 @@ public sealed class PersonaContentFixture
 
     private async Task EnsureRequestsAsync(CancellationToken cancellationToken)
     {
+        if (await ExistsAsync("SELECT 1 FROM taxonomy.competency WHERE code = 'data-analytics'", cancellationToken).ConfigureAwait(false))
+            return;
+
         await InsertRequestAsync(Id("301"), "asha-rao", "The Data analyst profile fits, with a reporting-heavy context to confirm.", cancellationToken).ConfigureAwait(false);
         await InsertRequestAsync(Id("302"), "dev-kapoor", "Modeling is short of the bar. Please confirm the analyst profile still holds.", cancellationToken).ConfigureAwait(false);
         var profileId = await ScalarGuidAsync(
@@ -568,6 +571,8 @@ public sealed class PersonaContentFixture
     private async Task InsertRequestAsync(Guid requestId, string reportId, string note, CancellationToken cancellationToken)
     {
         if (!await ExistsAsync("SELECT 1 FROM workforce.person WHERE employee_id = $1", cancellationToken, reportId).ConfigureAwait(false))
+            return;
+        if (await ExistsAsync("SELECT 1 FROM taxonomy.competency WHERE code = 'data-analytics'", cancellationToken).ConfigureAwait(false))
             return;
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = new NpgsqlCommand(
@@ -624,6 +629,8 @@ public sealed class PersonaContentFixture
     private async Task InsertDeclarationAsync(string subjectId, string skillCode, int rank, string name, CancellationToken cancellationToken)
     {
         if (!await ExistsAsync("SELECT 1 FROM workforce.person WHERE employee_id = $1", cancellationToken, subjectId).ConfigureAwait(false))
+            return;
+        if (await ExistsAsync("SELECT 1 FROM taxonomy.competency WHERE code = 'data-analytics'", cancellationToken).ConfigureAwait(false))
             return;
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var command = new NpgsqlCommand(

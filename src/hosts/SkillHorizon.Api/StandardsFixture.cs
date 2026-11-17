@@ -33,10 +33,13 @@ public sealed class StandardsFixture
     public async Task LoadAsync(CancellationToken cancellationToken)
     {
         await EnsureLead(cancellationToken).ConfigureAwait(false);
-        await _jobs.ImportAsync([Framework()], cancellationToken).ConfigureAwait(false);
-        if (await _taxonomy.FindByStatusAsync("published", cancellationToken).ConfigureAwait(false) is null)
+        var published = await _taxonomy.FindByStatusAsync("published", cancellationToken).ConfigureAwait(false);
+        var catalogue = published?.Skills.Any(skill => skill.Code == "d-01") == true;
+        await _jobs.ImportAsync([Framework(includeProfiles: !catalogue)], cancellationToken).ConfigureAwait(false);
+        if (published is null)
             await PublishInitialStandards(cancellationToken).ConfigureAwait(false);
-        await EnsureConsultantBenchmark(cancellationToken).ConfigureAwait(false);
+        if (!catalogue)
+            await EnsureConsultantBenchmark(cancellationToken).ConfigureAwait(false);
         await _scope.GrantAsync("person-lead", "data", cancellationToken).ConfigureAwait(false);
     }
 
@@ -122,7 +125,7 @@ public sealed class StandardsFixture
         await _benchmarks.PublishAsync(draft.BenchmarkVersionId, "person-ld", "standards-fixture", cancellationToken).ConfigureAwait(false);
     }
 
-    private static FrameworkImport Framework() =>
+    private static FrameworkImport Framework(bool includeProfiles) =>
         new(
             FrameworkCode,
             "Consulting",
@@ -130,10 +133,13 @@ public sealed class StandardsFixture
                 new LevelImport("associate", "Associate", 1),
                 new LevelImport("consultant", "Consultant", 2)
             ],
-            [
-                new ProfileImport("data-analyst", "Data analyst", "associate"),
-                new ProfileImport("data-consultant", "Data consultant", "consultant")
-            ]);
+            includeProfiles
+                ?
+                [
+                    new ProfileImport("data-analyst", "Data analyst", "associate"),
+                    new ProfileImport("data-consultant", "Data consultant", "consultant")
+                ]
+                : []);
 
     private async Task EnsureLead(CancellationToken cancellationToken)
     {

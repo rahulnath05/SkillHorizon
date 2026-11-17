@@ -91,10 +91,12 @@ public static class ShellEndpoints
         app.MapPost("/api/packs/{packId:guid}/decisions", (Delegate)DecideException);
         app.MapPost("/api/packs/{packId:guid}/seal", (Delegate)SealPack);
         app.MapGet("/api/practice/briefing", (Delegate)PracticeBriefing);
+        app.MapGet("/api/practice/profile", (Delegate)PracticeProfile);
         app.MapGet("/api/practice/baseline", (Delegate)PracticeBaseline);
         app.MapGet("/api/practice/progression", (Delegate)PracticeProgression);
         app.MapGet("/api/practice/market", (Delegate)PracticeMarket);
         app.MapGet("/api/practice/requests", (Delegate)PracticeRequests);
+        app.MapPost("/api/practice/requests", (Delegate)FilePracticeRequest);
         app.MapPost("/api/practice/requests/{requestId:guid}/accept", (Delegate)AcceptPracticeRequest);
         app.MapPost("/api/cohorts", (Delegate)CreateCohort);
         app.MapGet("/api/practice/readiness", (Delegate)PracticeReadiness);
@@ -1023,6 +1025,13 @@ public static class ShellEndpoints
         return await Proxy(http, HttpMethod.Post, "commands/market/publish", body).ConfigureAwait(false);
     }
 
+    private static Task<IResult> PracticeProfile(HttpContext http)
+    {
+        var practice = Uri.EscapeDataString(http.Request.Query["practice"].ToString());
+        var profile = Uri.EscapeDataString(http.Request.Query["profile"].ToString());
+        return Proxy(http, HttpMethod.Get, "practice/profile?practice=" + practice + "&profile=" + profile, null);
+    }
+
     private static Task<IResult> PracticeBaseline(HttpContext http)
     {
         var practice = Uri.EscapeDataString(http.Request.Query["practice"].ToString());
@@ -1051,6 +1060,14 @@ public static class ShellEndpoints
     {
         var practice = Uri.EscapeDataString(http.Request.Query["practice"].ToString());
         return Proxy(http, HttpMethod.Get, "practice/requests?practice=" + practice, null);
+    }
+
+    private static async Task<IResult> FilePracticeRequest(HttpContext http)
+    {
+        if (!await IsValidForm(http).ConfigureAwait(false))
+            return Results.BadRequest(new { error = "The form expired. Reload the page and try again." });
+        var body = await ReadBody(http).ConfigureAwait(false);
+        return await Proxy(http, HttpMethod.Post, "practice/requests", body).ConfigureAwait(false);
     }
 
     private static async Task<IResult> AcceptPracticeRequest(HttpContext http, Guid requestId)

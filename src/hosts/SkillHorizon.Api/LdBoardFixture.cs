@@ -83,6 +83,9 @@ public sealed class LdBoardFixture
                 ELSE meaning
             END
             WHERE taxonomy_version_id = $1
+              AND (
+                  code IN ('beginner', 'intermediate', 'expert')
+                  OR (code = 'advanced' AND rank = 3))
             """,
             connection))
         {
@@ -183,7 +186,7 @@ public sealed class LdBoardFixture
         await using (var command = new NpgsqlCommand(
             """
             INSERT INTO taxonomy.proficiency (taxonomy_version_id, code, display_name, rank, meaning)
-            SELECT $1, code, display_name, rank, ''
+            SELECT $1, code, display_name, rank, meaning
             FROM taxonomy.proficiency
             WHERE taxonomy_version_id = (SELECT taxonomy_version_id FROM taxonomy.version WHERE status = 'published' LIMIT 1)
             ON CONFLICT (taxonomy_version_id, rank) DO NOTHING
@@ -210,7 +213,7 @@ public sealed class LdBoardFixture
                 band = CASE code WHEN 'data-consultant' THEN 'Consultant' ELSE 'Associate' END,
                 family_name = 'Consulting',
                 competency_code = 'analysis'
-            WHERE code IN ('data-analyst', 'data-consultant')
+            WHERE code = 'data-consultant'
             """,
             connection))
             await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
@@ -238,6 +241,7 @@ public sealed class LdBoardFixture
                    'draft'
             FROM taxonomy.practice
             WHERE code = 'data'
+              AND NOT EXISTS (SELECT 1 FROM taxonomy.competency WHERE code = 'data-analytics')
             ON CONFLICT (code) DO NOTHING
             """,
             connection))
@@ -255,6 +259,7 @@ public sealed class LdBoardFixture
             FROM job_architecture.framework AS framework
             JOIN job_architecture.level AS level ON level.framework_id = framework.framework_id AND level.code = 'associate'
             WHERE framework.code = 'consulting'
+              AND NOT EXISTS (SELECT 1 FROM taxonomy.competency WHERE code = 'data-analytics')
             ON CONFLICT (code) DO NOTHING
             """,
             connection))
