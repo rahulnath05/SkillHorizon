@@ -365,7 +365,13 @@ public sealed class CatalogueStore
             throw new InvalidOperationException("That taxonomy skill does not exist.");
 
         await using (var snapshot = new NpgsqlCommand(
-            "UPDATE taxonomy.version_skill SET status = 'active' WHERE skill_code = $1",
+            """
+            UPDATE taxonomy.version_skill AS snapshot
+            SET status = 'active'
+            WHERE snapshot.skill_code = $1
+              AND snapshot.taxonomy_version_id IN (
+                  SELECT taxonomy_version_id FROM taxonomy.version WHERE status = 'draft')
+            """,
             connection,
             transaction))
         {
