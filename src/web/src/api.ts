@@ -1008,9 +1008,11 @@ export async function createCatalogueProfile(body: {
   band: string;
   family: string;
   competencyCode: string;
-}): Promise<void> {
+}): Promise<string> {
   const response = await postJson("/api/catalogue/profiles", body);
   if (!response.ok) throw new Error(await readError(response));
+  const created = await response.json() as { profile?: { profileId?: string } };
+  return created.profile?.profileId ?? "";
 }
 
 export async function activateTaxonomySkill(code: string): Promise<void> {

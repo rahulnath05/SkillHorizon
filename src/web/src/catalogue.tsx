@@ -9,8 +9,6 @@ import {
   useShell,
 } from "./api";
 import { ActivationPage, ApprovalsPage, OverviewPage, RequestsPage, TaxonomyPage, WorkspacePage } from "./ld";
-import { OperationsPage } from "./operations";
-import { EnginePage, StudioPage } from "./studio";
 import { formatAsOf, useTitle } from "./ui";
 
 const primaryNav: RailItem[] = [
@@ -20,7 +18,7 @@ const primaryNav: RailItem[] = [
   { id: "requests", label: "Profile requests", icon: "+" },
   { id: "approvals", label: "Approval queue", icon: "✓" },
   { id: "activation", label: "Activation centre", icon: "→" },
-  { id: "studio", label: "Assessment & programme", icon: "▦" },
+  { id: "studio", label: "Assessment & programme", icon: "▦", pill: "Coming soon" },
 ];
 
 const studioNav = [
@@ -66,8 +64,7 @@ export function CatalogueHome() {
     ...item,
     count: item.id === "requests" ? counts.requests : item.id === "approvals" ? counts.approvals : item.id === "activation" ? counts.activation : undefined,
   }));
-  const studioLabel = studioNav.find((item) => item.id === studioCurrent)?.label ?? "Overview";
-  const page = inStudio ? `Assessment & programme · ${studioLabel}` : raw === "market" ? "Market demand" : primaryNav.find((item) => item.id === raw)?.label ?? "Overview";
+  const page = inStudio ? "Assessment & programme" : raw === "market" ? "Market demand" : primaryNav.find((item) => item.id === raw)?.label ?? "Overview";
 
   return (
     <PersonaFrame
@@ -79,14 +76,8 @@ export function CatalogueHome() {
       railAction={<NavLink className="rail-new" to="/workspace/workspace">New profile</NavLink>}
       page={page}
       items={items}
-      currentId={inStudio ? studioCurrent! : raw}
+      currentId={inStudio ? "studio" : raw}
       highlightId={inStudio ? "studio" : raw === "market" ? "workspace" : raw}
-      studio={{
-        parentId: "studio",
-        open: inStudio,
-        currentId: studioCurrent ?? "studio",
-        items: studioNav,
-      }}
     >
       {raw === "taxonomy" ? <TaxonomyPage /> : null}
       {raw === "workspace" ? <WorkspacePage /> : null}
@@ -94,14 +85,18 @@ export function CatalogueHome() {
       {raw === "approvals" ? <ApprovalsPage /> : null}
       {raw === "market" ? <MarketPage /> : null}
       {raw === "activation" ? <ActivationPage /> : null}
-      {studioCurrent === "engine" ? <EnginePage /> : null}
-      {studioCurrent === "bank" || studioCurrent === "marking" || studioCurrent === "panel" ? <StudioPage screen={studioCurrent} /> : null}
-      {studioCurrent === "studio" ? <OperationsPage screen="studio" /> : null}
-      {studioCurrent === "scorecard" || studioCurrent === "operations" || studioCurrent === "declared" || studioCurrent === "pilot" || studioCurrent === "rolling" ? (
-        <OperationsPage screen={studioCurrent} />
-      ) : null}
+      {inStudio ? <ComingSoonPage /> : null}
       {raw === "overview" ? <OverviewPage /> : null}
     </PersonaFrame>
+  );
+}
+
+function ComingSoonPage() {
+  useTitle("Coming soon.");
+  return (
+    <section data-screen="studio">
+      <PageHead eyebrow="Assessment and programme" title="Coming soon." lede="This part of the workspace is not open yet." />
+    </section>
   );
 }
 
